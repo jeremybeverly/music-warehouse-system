@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="utf-8" />
+        <title>Aplikasi Gudang</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script src="https://cdn.webix.com/edge/webix.js"></script>
+        <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css" />
+        <link
+            rel="stylesheet"
+            href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css"
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+
+        <style>
+            :root {
+                /* NEW RED THEME */
+                --primary-color: #bb1724;
+                --primary-light: #fef2f2;
+                --primary-hover: #b91c1c;
+
+                --bg-color: #f8f9fa;
+                --sidebar-bg: #bb1724;
+                --text-color: #495057;
+                --border-color: #eff2f7;
+            }
+
+            body {
+                margin: 0;
+                height: 100vh;
+                font-family: "Inter", sans-serif;
+                background: var(--bg-color);
+                color: var(--text-color);
+            }
+
+            .app {
+                display: flex;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            /* Sidebar */
+            #sidebar {
+                width: 240px;
+                background: var(--sidebar-bg);
+                border-right: 1px solid var(--border-color);
+                display: flex;
+                flex-direction: column;
+                padding: 20px 0;
+                box-shadow: 4px 0 10px rgba(0, 0, 0, 0.05);
+                z-index: 10;
+                color: white;
+            }
+
+            #sidebar h3 {
+                padding: 0 24px;
+                margin-bottom: 30px;
+                font-size: 1.25rem;
+                font-weight: 700;
+                color: #ffffff;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            #sidebar nav {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                padding: 0 12px;
+            }
+
+            #sidebar a {
+                display: flex;
+                align-items: center;
+                padding: 12px 16px;
+                color: rgba(
+                    255,
+                    255,
+                    255,
+                    0.8
+                ); /* Soft white for inactive links */
+                text-decoration: none;
+                border-radius: 8px;
+                font-size: 0.95rem;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }
+
+            #sidebar a:hover {
+                background-color: rgba(
+                    255,
+                    255,
+                    255,
+                    0.1
+                ); /* Subtle white tint on hover */
+                color: #ffffff;
+            }
+
+            #sidebar a.active {
+                background-color: #ffffff; /* White background for active item */
+                color: var(--primary-color); /* Red text for active item */
+                font-weight: 700;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            }
+
+            /* Main Content */
+            #main {
+                flex: 1;
+                padding: 24px 32px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* Page Header */
+            .topbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 24px;
+            }
+
+            .topbar h2 {
+                margin: 0;
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: #343a40;
+            }
+
+            /* Webix Overrides for Red Theme */
+            .webix_view {
+                font-family: "Inter", sans-serif !important;
+            }
+            .webix_secondary {
+                background-color: #fff !important;
+                color: #74788d !important;
+            }
+
+            .custom_primary .webix_button {
+                background-color: #3b82f6 !important;
+                color: white !important;
+                border: none;
+            }
+            .custom_primary .webix_button:hover {
+                background-color: #2563eb !important;
+            }
+
+            .custom_secondary .webix_button {
+                background-color: #6c757d !important; /* Neutral Slate Gray */
+                color: white !important;
+                border: none !important;
+                font-weight: 500;
+                transition: background-color 0.2s ease;
+            }
+
+            .custom_secondary .webix_button:hover {
+                background-color: #5a6268 !important; /* Darker Gray on Hover */
+            }
+
+            .webix_danger {
+                background-color: #f46a6a !important; /* Keep alert red distinct or match if preferred */
+                border-color: #f46a6a !important;
+                color: #fff !important;
+            }
+
+            .my_hover {
+                background: #f9fafb;
+            }
+
+            .white_bg {
+                background: white;
+                border-bottom: 1px solid #eff2f7;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="app">
+            <div id="sidebar">
+                <h3>
+                    <span class="webix_icon wxi-cube"></span>Sentra Musik
+                    <br />Warehouse
+                </h3>
+                <nav>
+                    <a href="{{ url_for('rendertp_bp.home') }}" id="nav-home">
+                        <span
+                            class="mdi mdi-view-dashboard"
+                            style="margin-right: 15px"
+                        ></span>
+                        Dashboard
+                    </a>
+
+                    <a
+                        href="{{ url_for('rendertp_bp.display_items') }}"
+                        id="nav-items"
+                    >
+                        <span
+                            class="webix_icon wxi-folder"
+                            style="margin-right: 10px"
+                        ></span>
+                        Barang
+                    </a>
+
+                    <a
+                        href="{{ url_for('rendertp_bp.display_invoices') }}"
+                        id="nav-invoices"
+                    >
+                        <span
+                            class="webix_icon wxi-file"
+                            style="margin-right: 10px"
+                        ></span>
+                        Transaksi
+                    </a>
+
+                    <a
+                        href="{{ url_for('rendertp_bp.display_opname') }}"
+                        id="nav-opname"
+                    >
+                        <span
+                            class="webix_icon wxi-eye"
+                            style="margin-right: 10px"
+                        ></span>
+                        Stok Opname
+                    </a>
+                    {% if user and user.role in ['warehouse_admin',
+                    'warehouse_staff'] %}
+                    <a
+                        href="{{ url_for('rendertp_bp.display_suppliers') }}"
+                        id="nav-suppliers"
+                    >
+                        <span
+                            class="webix_icon wxi-user"
+                            style="margin-right: 10px"
+                        ></span>
+                        Supplier
+                    </a>
+                    {% endif %} {% if user and user.role == 'warehouse_admin' %}
+                    <a
+                        href="{{ url_for('rendertp_bp.display_branches') }}"
+                        id="nav-branches"
+                    >
+                        <span
+                            class="webix_icon wxi-map"
+                            style="margin-right: 10px"
+                        ></span>
+                        Cabang
+                    </a>
+                    {% endif %} {% if user.role in ['warehouse_admin',
+                    'branch_admin'] %}
+                    <a
+                        href="{{ url_for('rendertp_bp.display_users') }}"
+                        id="nav-users"
+                    >
+                        <span
+                            class="webix_icon"
+                            style="margin-right: 10px"
+                        ></span>
+                        Karyawan
+                    </a>
+                    {% endif %}
+
+                    <div
+                        style="
+                            margin-top: auto;
+                            border-top: 1px solid rgba(255, 255, 255, 0.2);
+                            padding-top: 10px;
+                        "
+                    >
+                        <a
+                            href="{{ url_for('login_bp.logout') }}"
+                            style="color: rgba(255, 255, 255, 0.8)"
+                        >
+                            <span
+                                class="webix_icon wxi-close-circle"
+                                style="margin-right: 10px"
+                            ></span>
+                            Logout
+                        </a>
+                    </div>
+                </nav>
+            </div>
+            <div id="main">{% block content %}{% endblock %}</div>
+        </div>
+        <script>
+            webix.attachEvent("onAjaxError", function (xhr) {
+                if (xhr.status === 401) {
+                    window.location.href = "/auth/login";
+                }
+            });
+            const path = window.location.pathname;
+            document.querySelectorAll("#sidebar a").forEach((a) => {
+                if (a.getAttribute("href") === path) {
+                    a.classList.add("active");
+                }
+            });
+
+            window.formatRupiah = function (value) {
+                return new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                }).format(value);
+            };
+        </script>
+    </body>
+</html>

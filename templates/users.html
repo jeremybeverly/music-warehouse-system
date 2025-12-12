@@ -1,0 +1,449 @@
+{% extends "base.html" %} {% block content %}
+<div class="topbar">
+    <h2>Manajemen Karyawan</h2>
+</div>
+
+<div
+    id="webix_users"
+    style="
+        height: calc(100vh - 120px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        overflow: hidden;
+    "
+></div>
+
+<script>
+    const userRole = "{{ user.role if user else '' }}";
+
+    function formatRoleLabel(role) {
+        const map = {
+            warehouse_admin: "WH Admin",
+            warehouse_staff: "WH Staff",
+            branch_admin: "Branch Admin",
+            branch_staff: "Branch Staff",
+        };
+        return map[role] || role;
+    }
+
+    const columns = [
+        {
+            id: "rank",
+            header: "No",
+            width: 40,
+            css: { "text-align": "center" },
+            template: function (obj) {
+                return $$("userTable").getIndexById(obj.id) + 1;
+            },
+        },
+        {
+            id: "user_code",
+            header: "ID",
+            width: 100,
+            sort: "string",
+            css: { "font-weight": "500" },
+        },
+        {
+            id: "full_name",
+            header: "Nama Lengkap",
+            fillspace: true,
+            sort: "string",
+            template: function (obj) {
+                return `<span style="font-weight:500;">${obj.full_name || "Unknown"}</span><br><span style="color:#888; font-size:11px;">${obj.username}</span>`;
+            },
+        },
+
+        {
+            id: "role",
+            header: "Jabatan",
+            width: 130,
+            sort: "string",
+            css: { "text-align": "center" },
+            template: function (obj) {
+                let badgeClass = "badge-grey";
+                if (obj.role && obj.role.includes("branch")) {
+                    badgeClass = "badge-yellow";
+                }
+                return `<span class='role-badge ${badgeClass}'>${formatRoleLabel(obj.role)}</span>`;
+            },
+        },
+        {
+            id: "branch_name",
+            header: "Lokasi",
+            width: 200,
+            sort: "string",
+            template: function (obj) {
+                return (
+                    obj.branch_name ||
+                    "<span style='color:#ccc; font-style:italic;'>Pusat</span>"
+                );
+            },
+        },
+        { id: "phone_number", header: "Telepon", width: 180, sort: "string" },
+        { id: "email", header: "Email", width: 180, sort: "string" },
+        {
+            id: "created_at_fmt",
+            header: "Dibuat Pada",
+            width: 120,
+            sort: "string",
+        },
+        {
+            id: "status",
+            header: "Status",
+            width: 80,
+            css: { "text-align": "center" },
+            template: function (obj) {
+                if (obj.status === "Suspended")
+                    return "<span style='color:#f46a6a; font-weight:600; font-size:11px;'>Suspended</span>";
+                return "<span style='color:#34c38f; font-weight:600; font-size:11px;'>Aktif</span>";
+            },
+        },
+    ];
+
+    if (userRole === "warehouse_admin") {
+        columns.push({
+            id: "actions",
+            header: "",
+            width: 100,
+            css: { "text-align": "center" },
+            template: `
+                <span class='webix_icon wxi-pencil' style='cursor:pointer; color:#3b82f6; margin-right:8px;' onclick="openEditForm('#id#')"></span>
+                <span class='webix_icon wxi-trash' style='cursor:pointer; color:#f46a6a;' onclick="deleteUser('#id#')"></span>
+            `,
+        });
+    }
+
+    const toolbarElements = [
+        {
+            view: "combo",
+            id: "filterRole",
+            placeholder: "Filter Jabatan",
+            width: 160,
+            options: [
+                { id: "warehouse_admin", value: "Warehouse Admin" },
+                { id: "warehouse_staff", value: "Warehouse Staff" },
+                { id: "branch_admin", value: "Branch Admin" },
+                { id: "branch_staff", value: "Branch Staff" },
+            ],
+            on: { onChange: applyFilters },
+        },
+        { width: 10 },
+        {
+            view: "search",
+            id: "searchBar",
+            placeholder: "Cari nama/username...",
+            width: 250,
+            on: { onTimedKeyPress: applyFilters },
+        },
+        {},
+    ];
+
+    if (userRole === "warehouse_admin") {
+        toolbarElements.push({
+            view: "button",
+            value: "Tambah User",
+            width: 150,
+            css: "custom_primary",
+            icon: "wxi-plus",
+            click: openAddForm,
+        });
+    }
+
+    const toolbar = {
+        view: "toolbar",
+        css: "white_bg",
+        borderless: true,
+        paddingY: 10,
+        paddingX: 15,
+        elements: toolbarElements,
+    };
+
+    const sideMenu = {
+        view: "sidemenu",
+        id: "usersSideMenu",
+        width: 450,
+        position: "right",
+        css: "webix_sidemenu",
+        body: {
+            view: "form",
+            id: "userForm",
+            padding: 24,
+            elementsConfig: { labelPosition: "top", marginBottom: 15 },
+            elements: [
+                {
+                    id: "formHeader",
+                    type: "header",
+                    template: "Tambah Pengguna",
+                    css: "webix_header",
+                    borderless: true,
+                },
+                { view: "text", name: "_id", hidden: true },
+                {
+                    view: "text",
+                    name: "username",
+                    label: "Username",
+                    required: true,
+                },
+                {
+                    view: "text",
+                    id: "passwordField",
+                    name: "password",
+                    type: "password",
+                    label: "Password",
+                    required: true,
+                    invalidMessage: "Minimal 8 karakter",
+                },
+                {
+                    cols: [
+                        {
+                            view: "text",
+                            name: "first_name",
+                            label: "Nama Depan",
+                            required: true,
+                        },
+                        { width: 15 },
+                        {
+                            view: "text",
+                            name: "last_name",
+                            label: "Nama Belakang",
+                            required: true,
+                        },
+                    ],
+                },
+                {
+                    cols: [
+                        {
+                            view: "text",
+                            name: "email",
+                            label: "Email",
+                            required: true,
+                        },
+                        { width: 15 },
+                        { view: "text", name: "phone_number", label: "No. HP" },
+                    ],
+                },
+                {
+                    view: "combo",
+                    id: "roleCombo",
+                    name: "role",
+                    label: "Peran (Role)",
+                    options: [
+                        { id: "warehouse_admin", value: "Warehouse Admin" },
+                        { id: "warehouse_staff", value: "Warehouse Staff" },
+                        { id: "branch_admin", value: "Branch Admin" },
+                        { id: "branch_staff", value: "Branch Staff" },
+                    ],
+                    required: true,
+                    on: {
+                        onChange: function (newVal) {
+                            if (
+                                newVal === "branch_admin" ||
+                                newVal === "branch_staff"
+                            ) {
+                                $$("branchCombo").show();
+                            } else {
+                                $$("branchCombo").hide();
+                                $$("branchCombo").setValue("");
+                            }
+                        },
+                    },
+                },
+                {
+                    view: "combo",
+                    id: "branchCombo",
+                    name: "branch_name",
+                    label: "Penempatan Cabang",
+                    placeholder: "Pilih Cabang...",
+                    options: [],
+                    hidden: true,
+                },
+                {
+                    view: "combo",
+                    id: "statusCombo",
+                    name: "status",
+                    label: "Status Akun",
+                    options: ["Aktif", "Suspended"],
+                    value: "Aktif",
+                },
+                { height: 20 },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            value: "Simpan",
+                            css: "custom_primary",
+                            height: 45,
+                            click: saveUserData,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            value: "Batal",
+                            css: "custom_secondary",
+                            height: 45,
+                            click: () => $$("usersSideMenu").hide(),
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    webix.ready(function () {
+        webix.ui({
+            container: "webix_users",
+            rows: [
+                toolbar,
+                {
+                    view: "datatable",
+                    id: "userTable",
+                    columns: columns,
+                    url: "/api/users/",
+                    hover: "my_hover",
+                    select: "row",
+                    css: "webix_data_border webix_header_border",
+                    rowHeight: 60,
+                },
+            ],
+        });
+        webix.ui(sideMenu);
+        loadBranches();
+    });
+
+    function loadBranches() {
+        webix
+            .ajax()
+            .get("/api/branches/")
+            .then((res) => {
+                const data = res.json();
+                const options = data.map((b) => ({
+                    id: b.name,
+                    value: b.name,
+                }));
+                $$("branchCombo").getPopup().getList().clearAll();
+                $$("branchCombo").getPopup().getList().parse(options);
+            });
+    }
+
+    function applyFilters() {
+        const role = $$("filterRole").getValue();
+        const search = $$("searchBar").getValue();
+
+        const params = { _t: Date.now() };
+        if (role) params.role = role;
+        if (search) params.search = search;
+
+        $$("userTable").clearAll();
+        $$("userTable").load(() => webix.ajax().get("/api/users/", params));
+    }
+
+    function openAddForm() {
+        if (userRole !== "warehouse_admin") return;
+        $$("userForm").clear();
+        $$("formHeader").setHTML("Tambah Pengguna Baru");
+        $$("passwordField").define("required", true);
+        $$("passwordField").refresh();
+        $$("statusCombo").setValue("Active");
+        $$("branchCombo").hide();
+        $$("usersSideMenu").show();
+    }
+
+    window.openEditForm = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        const item = $$("userTable").getItem(id);
+        if (item) {
+            $$("userForm").setValues(item);
+            if (item.role.includes("branch")) {
+                $$("branchCombo").show();
+            } else {
+                $$("branchCombo").hide();
+            }
+            $$("formHeader").setHTML("Edit Pengguna");
+            $$("passwordField").define("required", false);
+            $$("passwordField").refresh();
+            $$("usersSideMenu").show();
+        }
+    };
+
+    function saveUserData() {
+        const form = $$("userForm");
+        const values = form.getValues();
+        const isUpdate = !!values._id;
+
+        if (!isUpdate && !values.password)
+            return webix.message({
+                type: "error",
+                text: "Password wajib diisi",
+            });
+        if (!form.validate())
+            return webix.message({
+                type: "error",
+                text: "Wajib lengkapi data!",
+            });
+
+        if (
+            (values.role === "branch_admin" ||
+                values.role === "branch_staff") &&
+            !values.branch_name
+        ) {
+            return webix.message({
+                type: "error",
+                text: "Role Cabang wajib pilih lokasi cabang!",
+            });
+        }
+
+        const method = isUpdate ? "PUT" : "POST";
+        const endpoint = isUpdate ? `/api/users/${values._id}` : "/api/users/";
+
+        if (!isUpdate) delete values._id;
+
+        webix
+            .ajax()
+            .headers({ "Content-Type": "application/json" })
+            [method.toLowerCase()](endpoint, JSON.stringify(values))
+            .then(() => {
+                webix.message(isUpdate ? "User diupdate" : "User ditambahkan");
+                applyFilters();
+                $$("usersSideMenu").hide();
+            })
+            .catch((xhr) => {
+                let msg = "Error";
+                try {
+                    msg = JSON.parse(xhr.response).error;
+                } catch (e) {}
+                webix.message({ type: "error", text: msg });
+            });
+    }
+
+    window.deleteUser = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        webix.confirm({
+            title: "Hapus",
+            text: "Yakin hapus pengguna ini?",
+            ok: "Ya",
+            cancel: "Batal",
+            callback: function (result) {
+                if (result) {
+                    webix
+                        .ajax()
+                        .del(`/api/users/${id}`)
+                        .then(() => {
+                            $$("userTable").remove(id);
+                            webix.message("Pengguna dihapus");
+                        });
+                }
+            },
+        });
+    };
+</script>
+
+<style>
+    .role-badge {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+    }
+</style>
+{% endblock %}

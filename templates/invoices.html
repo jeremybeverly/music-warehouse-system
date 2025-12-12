@@ -1,0 +1,907 @@
+{% extends "base.html" %} {% block content %}
+<div class="topbar">
+    <h2>Transaksi & Invoice</h2>
+</div>
+
+<div
+    id="webix_invoices"
+    style="
+        height: calc(100vh - 120px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        overflow: hidden;
+    "
+></div>
+
+<script>
+    const userRole = "{{ user.role if user else '' }}";
+    const userBranch = "{{ user.branch_name if user.branch_name else '' }}";
+    let allItems = [];
+
+    let transactionOptions = [];
+    let filterTypeOptions = [];
+    let defaultType = "OUT";
+
+    if (userRole.includes("warehouse")) {
+        transactionOptions = [
+            { id: "IN", value: "Pembelian (IN)" },
+            { id: "OUT", value: "Distribusi (OUT)" },
+        ];
+        filterTypeOptions = [
+            { id: "IN", value: "Pembelian (IN)" },
+            { id: "OUT", value: "Distribusi (OUT)" },
+        ];
+        defaultType = "IN";
+    } else {
+        // Branch View
+        transactionOptions = [
+            { id: "OUT", value: "Request Stok" },
+            { id: "SALE", value: "Penjualan" },
+        ];
+        filterTypeOptions = [
+            { id: "OUT", value: "Restock" },
+            { id: "SALE", value: "Sale (Penjualan)" },
+        ];
+        defaultType = "OUT";
+    }
+
+    const invoicesSide = {
+        view: "sidemenu",
+        id: "invoicesSide",
+        width: 500,
+        position: "right",
+        css: "webix_sidemenu",
+        body: {
+            view: "form",
+            id: "invoiceCreateForm",
+            padding: 24,
+            elementsConfig: { labelPosition: "top", marginBottom: 15 },
+            elements: [
+                {
+                    type: "header",
+                    template: "Buat Transaksi Baru",
+                    css: "webix_header",
+                    borderless: true,
+                },
+                {
+                    view: "segmented",
+                    id: "typeRadio",
+                    name: "type",
+                    options: transactionOptions,
+                    value: defaultType,
+                    on: { onChange: toggleSource },
+                    hidden: transactionOptions.length === 1,
+                },
+                {
+                    view: "combo",
+                    id: "sourceCombo",
+                    name: "supplier_id",
+                    label: "Supplier",
+                    options: [],
+                    hidden: true,
+                    placeholder: "Pilih Supplier...",
+                },
+                {
+                    view: "combo",
+                    id: "branchDestCombo",
+                    name: "branch_id",
+                    label: "Tujuan Cabang",
+                    options: [],
+                    hidden: true,
+                    placeholder: "Pilih Cabang...",
+                },
+                { type: "section", template: "Keranjang Barang" },
+                {
+                    cols: [
+                        {
+                            view: "combo",
+                            id: "itemCombo",
+                            placeholder: "Cari Barang...",
+                            options: [],
+                            gravity: 2,
+                        },
+                        { width: 10 },
+                        {
+                            view: "counter",
+                            id: "qtyCounter",
+                            value: 1,
+                            min: 1,
+                            width: 100,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            type: "icon",
+                            icon: "wxi-plus",
+                            width: 40,
+                            css: "webix_transparent",
+                            click: addToCart,
+                        },
+                    ],
+                },
+                {
+                    view: "datatable",
+                    id: "invoiceCart",
+                    minHeight: 200,
+                    css: "webix_data_border",
+                    editable: true,
+                    editaction: "dblclick",
+                    scroll: "y",
+                    columns: [
+                        {
+                            id: "item_name",
+                            header: "Nama Barang",
+                            fillspace: true,
+                        },
+                        {
+                            id: "quantity",
+                            header: "Qty",
+                            width: 60,
+                            editor: "text",
+                            css: "text-center",
+                        },
+                        {
+                            id: "price",
+                            header: "Harga",
+                            width: 100,
+                            template: (obj) => window.formatRupiah(obj.price),
+                            css: "text-right",
+                        },
+                        {
+                            id: "del",
+                            header: "",
+                            width: 40,
+                            template:
+                                "<span class='webix_icon wxi-trash' style='color:#f46a6a; cursor:pointer;'></span>",
+                            css: "text-center",
+                        },
+                    ],
+                    onClick: {
+                        "wxi-trash": function (e, id) {
+                            this.remove(id);
+                        },
+                    },
+                },
+                { height: 20 },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            value: "Simpan & Proses",
+                            css: "custom_primary",
+                            height: 45,
+                            click: submitInvoice,
+                        },
+                        { width: 15 },
+                        {
+                            view: "button",
+                            value: "Batal",
+                            css: "custom_secondary",
+                            height: 45,
+                            click: () => $$("invoicesSide").hide(),
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    const invoiceDetailSide = {
+        view: "sidemenu",
+        id: "invoiceDetailSide",
+        width: 500,
+        position: "right",
+        body: {
+            rows: [
+                {
+                    view: "toolbar",
+                    css: "white_bg",
+                    paddingY: 10,
+                    elements: [
+                        { width: 10 },
+                        {
+                            view: "label",
+                            label: "Detail Transaksi",
+                            css: "header_label",
+                        },
+                        {
+                            view: "icon",
+                            icon: "wxi-download",
+                            tooltip: "Cetak Invoice",
+                            width: 40,
+                            click: () =>
+                                window.open(
+                                    "/invoices/print/" +
+                                        $$("invoiceDetailHeader").getValues()
+                                            ._id,
+                                    "_blank",
+                                ),
+                        },
+                        {
+                            view: "icon",
+                            icon: "wxi-close",
+                            tooltip: "Tutup",
+                            click: () => $$("invoiceDetailSide").hide(),
+                        },
+                    ],
+                },
+                {
+                    view: "template",
+                    id: "invoiceDetailHeader",
+                    height: 280,
+                    css: "detail_template",
+                    template: (obj) => {
+                        if (!obj.invoice_code) return "";
+
+                        let statusColor = "#34c38f";
+                        let statusIcon = "mdi-check-circle";
+
+                        if (obj.status.includes("PENDING")) {
+                            statusColor = "#f1b44c";
+                            statusIcon = "mdi-clock-outline";
+                        } else if (obj.status === "DITOLAK") {
+                            statusColor = "#f46a6a";
+                            statusIcon = "mdi-alert-circle";
+                        }
+
+                        let actionHtml = "";
+
+                        if (obj.status === "DITOLAK") {
+                            const rejecter = obj.rejected_by || "Sistem";
+                            const time = obj.rejected_at_fmt || "-";
+                            actionHtml = `
+                                <div class="detail-row danger">
+                                    <i class="mdi mdi-close-circle"></i>
+                                    <div>
+                                        <div style="font-weight:600;">Ditolak oleh ${rejecter}</div>
+                                        <div style="font-size:11px; opacity:0.8;">${time}</div>
+                                    </div>
+                                </div>`;
+                        } else if (
+                            obj.approved_at_fmt &&
+                            obj.approved_at_fmt !== "-"
+                        ) {
+                            const approver =
+                                obj.approved_warehouse_by ||
+                                obj.approved_by_branch ||
+                                "Admin";
+                            actionHtml = `
+                                <div class="detail-row success">
+                                    <i class="mdi mdi-check-all"></i>
+                                    <div>
+                                        <div style="font-weight:600;">Disetujui oleh ${approver}</div>
+                                        <div style="font-size:11px; opacity:0.8;">${obj.approved_at_fmt}</div>
+                                    </div>
+                                </div>`;
+                        }
+
+                        return `
+                            <div class="detail-container">
+                                <div class="detail-header">
+                                    <h2 class="detail-code">${obj.invoice_code}</h2>
+                                    <span class="detail-status" style="background:${statusColor}">
+                                        <i class="mdi ${statusIcon}"></i> ${obj.status}
+                                    </span>
+                                </div>
+
+                                <div class="detail-grid">
+                                    <div class="detail-box">
+                                        <span class="label">Tipe Transaksi</span>
+                                        <span class="value">${obj.type}</span>
+                                    </div>
+                                    <div class="detail-box">
+                                        <span class="label">Tanggal</span>
+                                        <span class="value">${obj.timestamp_fmt}</span>
+                                    </div>
+                                </div>
+
+                                <div class="detail-route">
+                                    <div class="route-point">
+                                        <span class="label">Partner Transaksi</span>
+                                        <strong class="value" style="font-size:16px;">${obj.transaction_partner}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="detail-meta">
+                                    <div class="detail-row" style="margin-bottom:15px; padding-bottom:15px; border-bottom:1px dashed #eee;">
+                                        <i class="mdi mdi-account"></i>
+                                        <span>Dibuat oleh: <b>${obj.created_by}</b></span>
+
+                                    </div>
+                                    ${actionHtml}
+                                </div>
+                            </div>
+                        `;
+                    },
+                },
+                {
+                    view: "datatable",
+                    id: "invoiceDetailItems",
+                    autoheight: true,
+                    css: "webix_data_border",
+                    columns: [
+                        {
+                            id: "item_name",
+                            header: "Nama Barang",
+                            fillspace: true,
+                        },
+                        {
+                            id: "quantity",
+                            header: "Qty",
+                            width: 70,
+                            css: "text-center",
+                        },
+                        {
+                            id: "price_at_time",
+                            header: "Harga Satuan",
+                            width: 120,
+                            format: window.formatRupiah,
+                            css: "text-right",
+                            hidden: userRole.includes("branch"),
+                        },
+                        {
+                            id: "subtotal",
+                            header: "Total",
+                            width: 120,
+                            format: window.formatRupiah,
+                            css: "text-right",
+                            hidden: userRole.includes("branch"),
+                            template: function (obj) {
+                                const sub =
+                                    (obj.quantity || 0) *
+                                    (obj.price_at_time || 0);
+                                return window.formatRupiah(sub);
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    const filterToolbar = {
+        view: "toolbar",
+        css: "white_bg",
+        borderless: true,
+        paddingY: 10,
+        paddingX: 15,
+        elements: [
+            {
+                view: "combo",
+                id: "filterType",
+                width: 160,
+                placeholder: "Tipe",
+                options: filterTypeOptions,
+                on: { onChange: applyFilter },
+            },
+            {
+                view: "combo",
+                id: "filterStatus",
+                width: 160,
+                placeholder: "Status",
+                options: [
+                    "PENDING_CABANG",
+                    "PENDING_WH",
+                    "DITERIMA",
+                    "DITOLAK",
+                ],
+                on: { onChange: applyFilter },
+            },
+            {
+                view: "datepicker",
+                id: "startDate",
+                width: 130,
+                placeholder: "Dari",
+                stringResult: true,
+                format: "%Y-%m-%d",
+                on: { onChange: applyFilter },
+            },
+            {
+                view: "datepicker",
+                id: "endDate",
+                width: 130,
+                placeholder: "Sampai",
+                stringResult: true,
+                format: "%Y-%m-%d",
+                on: { onChange: applyFilter },
+            },
+            {
+                view: "icon",
+                icon: "wxi-sync",
+                tooltip: "Reset",
+                click: () => {
+                    $$("filterType").setValue("");
+                    $$("filterStatus").setValue("");
+                    $$("startDate").setValue("");
+                    $$("endDate").setValue("");
+                    applyFilter();
+                },
+            },
+            {},
+            {
+                view: "button",
+                value: "Buat Transaksi",
+                width: 160,
+                css: "custom_primary",
+                icon: "wxi-plus",
+                click: () => {
+                    $$("invoicesSide").show();
+                    $$("invoiceCart").clearAll();
+                    $$("typeRadio").setValue(defaultType);
+                    toggleSource(defaultType);
+                },
+            },
+        ],
+    };
+
+    const invoiceTable = {
+        view: "datatable",
+        id: "invoiceTable",
+        css: "webix_data_border webix_header_border",
+        rowHeight: 50,
+        select: "row",
+        hover: "my_hover",
+        columns: [
+            {
+                id: "rank",
+                header: "No",
+                width: 50,
+                css: { "text-align": "center" },
+                template: (obj) => $$("invoiceTable").getIndexById(obj.id) + 1,
+            },
+            {
+                id: "invoice_code",
+                header: "No. Invoice",
+                width: 140,
+                css: { "font-weight": "500" },
+            },
+            {
+                id: "type",
+                header: "Tipe",
+                width: 110,
+                css: { "text-align": "center" },
+                template: (o) => {
+                    if (o.type === "IN")
+                        return "<span class='badge-in'>BELI (IN)</span>";
+                    if (o.type === "SALE")
+                        return "<span class='badge-sale'>JUAL</span>";
+                    if (userRole.includes("branch"))
+                        return "<span class='badge-out'>RESTOCK</span>";
+                    return "<span class='badge-out'>DISTRIBUSI</span>";
+                },
+            },
+            {
+                id: "status",
+                header: "Status",
+                width: 140,
+                template: (o) => {
+                    if (o.status.includes("PENDING"))
+                        return "<span style='color:#f59e0b; font-weight:600;'>Menunggu</span>";
+                    if (o.status === "DITERIMA")
+                        return "<span style='color:#10b981; font-weight:bold;'>Selesai</span>";
+                    return "<span style='color:#ef4444;'>Ditolak</span>";
+                },
+            },
+
+            {
+                id: "transaction_partner",
+                header: "Partner Transaksi",
+                width: 200,
+                sort: "string",
+            },
+
+            { id: "timestamp_fmt", header: "Tanggal", width: 140 },
+            {
+                id: "actions",
+                header: "Aksi",
+                fillspace: true,
+                css: "text-center",
+                template: function (obj) {
+                    if (
+                        (obj.status === "PENDING_BRANCH" &&
+                            userRole === "branch_admin") ||
+                        (obj.status === "PENDING_WAREHOUSE" &&
+                            userRole === "warehouse_admin")
+                    ) {
+                        return `
+                                        <button class='btn-mini btn-approve' title='Setujui' onclick="approveInvoice('${obj._id}')"><span class='webix_icon wxi-check'></span></button>
+                                        <button class='btn-mini btn-reject' title='Tolak' onclick="rejectInvoice('${obj._id}')"><span class='webix_icon wxi-close'></span></button>
+                                    `;
+                    }
+                    if (userRole.includes("admin")) {
+                        return `<span class='webix_icon wxi-trash' style='color:#ccc; cursor:pointer; font-size:18px;' onclick="deleteInvoice('${obj._id}')"></span>`;
+                    }
+                    return "";
+                },
+            },
+        ],
+        url: "/api/invoices/",
+        on: {
+            onItemClick: function (id, e) {
+                if (
+                    !e.target.closest("button") &&
+                    !e.target.classList.contains("webix_icon")
+                ) {
+                    const item = this.getItem(id);
+                    $$("invoiceDetailSide").show();
+                    $$("invoiceDetailHeader").setValues(item);
+                    $$("invoiceDetailItems").clearAll();
+                    const table = $$("invoiceDetailItems");
+
+                    const showPrice =
+                        item.type === "IN" || item.type === "SALE";
+                    if (showPrice) {
+                        if (!table.isColumnVisible("price_at_time"))
+                            table.showColumn("price_at_time");
+                        if (!table.isColumnVisible("subtotal"))
+                            table.showColumn("subtotal");
+                    } else {
+                        if (table.isColumnVisible("price_at_time"))
+                            table.hideColumn("price_at_time");
+                        if (table.isColumnVisible("subtotal"))
+                            table.hideColumn("subtotal");
+                    }
+                    if (item.items) table.parse(item.items);
+                }
+            },
+        },
+    };
+
+    webix.ready(function () {
+        webix.ui({
+            container: "webix_invoices",
+            rows: [filterToolbar, invoiceTable],
+        });
+        webix.ui(invoicesSide);
+        webix.ui(invoiceDetailSide);
+        loadLookups();
+    });
+
+    function loadLookups() {
+        webix
+            .ajax()
+            .get("/api/items/")
+            .then((res) => {
+                allItems = res.json();
+                $$("itemCombo")
+                    .getPopup()
+                    .getList()
+                    .parse(
+                        allItems.map((i) => ({
+                            id: i.item_code,
+                            value: `${i.name} (${i.stock})`,
+                        })),
+                    );
+            });
+
+        if (userRole.includes("warehouse")) {
+            webix
+                .ajax()
+                .get("/api/branches/")
+                .then((res) =>
+                    $$("branchDestCombo")
+                        .getPopup()
+                        .getList()
+                        .parse(
+                            res
+                                .json()
+                                .map((b) => ({ id: b.name, value: b.name })),
+                        ),
+                );
+            webix
+                .ajax()
+                .get("/api/suppliers/?status=Aktif")
+                .then((res) =>
+                    $$("sourceCombo")
+                        .getPopup()
+                        .getList()
+                        .parse(
+                            res
+                                .json()
+                                .map((s) => ({ id: s.name, value: s.name })),
+                        ),
+                );
+        }
+        $$("typeRadio").setValue(defaultType);
+        toggleSource(defaultType);
+    }
+
+    function toggleSource(type) {
+        const table = $$("invoiceCart");
+        $$("sourceCombo").hide();
+        $$("branchDestCombo").hide();
+
+        if (type === "IN" || type === "SALE") {
+            if (!table.isColumnVisible("price")) table.showColumn("price");
+        } else {
+            if (table.isColumnVisible("price")) table.hideColumn("price");
+        }
+
+        if (type === "IN") {
+            $$("sourceCombo").show();
+        } else if (type === "OUT" && userRole.includes("warehouse")) {
+            $$("branchDestCombo").show();
+        }
+    }
+
+    function addToCart() {
+        const code = $$("itemCombo").getValue();
+        const qty = $$("qtyCounter").getValue();
+        if (!code)
+            return webix.message({ type: "error", text: "Pilih barang" });
+        const item = allItems.find((i) => i.item_code === code);
+        $$("invoiceCart").add({
+            item_code: code,
+            item_name: item.name,
+            price: item.price,
+            quantity: qty,
+        });
+        $$("itemCombo").setValue("");
+    }
+
+    function submitInvoice() {
+        const payload = {
+            type: $$("typeRadio").getValue(),
+            items: $$("invoiceCart").serialize(),
+            supplier_id: $$("sourceCombo").getValue(),
+            branch_id: $$("branchDestCombo").getValue(),
+        };
+        if (payload.items.length === 0)
+            return webix.message({ type: "error", text: "Keranjang kosong" });
+
+        webix
+            .ajax()
+            .headers({ "Content-Type": "application/json" })
+            .post("/api/invoices/", JSON.stringify(payload))
+            .then(() => {
+                webix.message("Berhasil");
+                $$("invoicesSide").hide();
+                applyFilter();
+            })
+            .catch(() => webix.message({ type: "error", text: "Gagal" }));
+    }
+
+    function applyFilter() {
+        const params = {
+            type: $$("filterType").getValue(),
+            status: $$("filterStatus").getValue(),
+            start_date: $$("startDate").getValue(),
+            end_date: $$("endDate").getValue(),
+            _t: Date.now(),
+        };
+        $$("invoiceTable").clearAll();
+        $$("invoiceTable").load(() =>
+            webix.ajax().get("/api/invoices/", params),
+        );
+    }
+
+    window.approveInvoice = (id) => {
+        if (webix.storage.local.get("is_approving")) return;
+        webix.storage.local.put("is_approving", true);
+
+        webix
+            .ajax()
+            .post(`/api/invoices/${id}/approve`)
+            .then(() => {
+                webix.message("Berhasil Disetujui");
+                applyFilter();
+                $$("invoiceDetailSide").hide();
+            })
+            .catch((err) => {
+                let msg = "Terjadi kesalahan server";
+                try {
+                    msg = JSON.parse(err.response).error;
+                } catch (e) {}
+
+                webix.alert({
+                    type: "alert-error",
+                    title: "Gagal Approve",
+                    text: msg,
+                });
+            })
+            .finally(() => {
+                webix.storage.local.remove("is_approving");
+            });
+    };
+    window.rejectInvoice = (id) => {
+        webix.confirm({
+            title: "Tolak",
+            text: "Yakin ingin menolak transaksi ini?",
+            ok: "Ya, Tolak",
+            cancel: "Batal",
+            callback: function (res) {
+                if (res) {
+                    webix
+                        .ajax()
+                        .post(`/api/invoices/${id}/reject`)
+                        .then(() => {
+                            webix.message("Transaksi Ditolak");
+                            applyFilter();
+                            $$("invoiceDetailSide").hide();
+                        })
+                        .catch((err) => {
+                            webix.alert({
+                                type: "alert-error",
+                                title: "Error",
+                                text: "Gagal menolak transaksi",
+                            });
+                        });
+                }
+            },
+        });
+    };
+    window.deleteInvoice = (id) =>
+        webix.confirm("Hapus Invoice?").then((res) => {
+            if (res)
+                webix
+                    .ajax()
+                    .del(`/api/invoices/${id}`)
+                    .then(() => {
+                        webix.message("Invoice Dihapus");
+                        applyFilter();
+                    });
+        });
+</script>
+
+<style>
+    /* Detail View Styling */
+    .detail-container {
+        padding: 20px;
+        font-family: "Inter", sans-serif;
+    }
+
+    .detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 15px;
+    }
+
+    .detail-code {
+        margin: 0;
+        font-size: 20px;
+        color: #333;
+        font-weight: 700;
+    }
+
+    .detail-status {
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .detail-box .label {
+        display: block;
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .detail-box .value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #444;
+    }
+
+    /* Partner Box */
+    .detail-route {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px dashed #dde2e6;
+        text-align: center;
+    }
+
+    .route-point .label {
+        display: block;
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+
+    .detail-meta {
+        background: #fff;
+    }
+
+    .detail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: #555;
+        margin-bottom: 8px;
+    }
+
+    .detail-row i {
+        font-size: 16px;
+        color: #888;
+    }
+
+    .detail-row.success {
+        color: #34c38f;
+    }
+    .detail-row.success i {
+        color: #34c38f;
+    }
+
+    .detail-row.danger {
+        color: #f46a6a;
+    }
+    .detail-row.danger i {
+        color: #f46a6a;
+    }
+
+    /* Badges & Buttons */
+    .badge-in {
+        color: #10b981;
+        background: #ecfdf5;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .badge-sale {
+        color: #6366f1;
+        background: #e0e7ff;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .badge-out {
+        color: #f59e0b;
+        background: #fff7ed;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .btn-mini {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 5px;
+        color: white;
+        width: 32px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-approve {
+        background: #34c38f;
+    }
+    .btn-approve:hover {
+        background: #2ca579;
+    }
+    .btn-reject {
+        background: #f46a6a;
+    }
+    .btn-reject:hover {
+        background: #d64d4d;
+    }
+    .btn-mini .webix_icon {
+        font-size: 16px;
+        margin: 0;
+    }
+</style>
+{% endblock %}

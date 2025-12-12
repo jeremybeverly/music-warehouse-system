@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Login - Sentra Musik</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script src="https://cdn.webix.com/edge/webix.js"></script>
+        <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: "Inter", sans-serif;
+                background: #f8f9fa;
+                height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .login-wrapper {
+                display: flex;
+                width: 500px;
+                height: 550px;
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+            }
+            .login-left {
+                flex: 1;
+                padding: 60px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+
+            .brand-title {
+                font-size: 28px;
+                font-weight: 800;
+                margin-bottom: 10px;
+                color: #1f2937;
+                text-align: center;
+            }
+            .brand-subtitle {
+                color: #6b7280;
+                margin-bottom: 40px;
+                font-size: 14px;
+                text-align: center;
+            }
+            .right-content h2 {
+                font-size: 32px;
+                font-weight: 700;
+                margin-bottom: 15px;
+            }
+            .right-content p {
+                font-size: 16px;
+                opacity: 0.9;
+                text-align: center;
+                line-height: 1.6;
+            }
+            /* Webix Overrides */
+            .webix_view {
+                background: transparent !important;
+            }
+            .custom_login_btn .webix_button {
+                background-color: #bb1724 !important;
+                color: white !important;
+                font-weight: 600;
+                border-radius: 8px;
+                transition: background 0.2s;
+            }
+            .custom_login_btn .webix_button:hover {
+                background-color: #99121d !important;
+            }
+            .webix_inp_label {
+                font-weight: 500;
+                color: #374151;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-wrapper">
+            <div class="login-left">
+                <div class="brand-title">Selamat Datang</div>
+                <div class="brand-subtitle">
+                    Silahkan login untuk mengakses sistem warehouse.
+                </div>
+                <div id="login_form_container"></div>
+            </div>
+        </div>
+
+        <script>
+            webix.ready(function () {
+                webix.ui({
+                    container: "login_form_container",
+                    view: "form",
+                    id: "loginForm",
+                    borderless: true,
+                    elements: [
+                        {
+                            view: "text",
+                            name: "username",
+                            label: "Username",
+                            labelPosition: "top",
+                            placeholder: "Masukkan username",
+                            height: 80,
+                        },
+                        {
+                            view: "text",
+                            type: "password",
+                            name: "password",
+                            label: "Password",
+                            labelPosition: "top",
+                            placeholder: "Masukkan password",
+                            height: 80,
+                        },
+                        { height: 10 },
+                        {
+                            view: "button",
+                            value: "Masuk Sekarang",
+                            css: "custom_login_btn",
+                            height: 50,
+                            click: doLogin,
+                        },
+                    ],
+                    rules: {
+                        username: webix.rules.isNotEmpty,
+                        password: webix.rules.isNotEmpty,
+                    },
+                });
+            });
+
+            function doLogin() {
+                const form = $$("loginForm");
+                if (!form.validate()) {
+                    webix.message({
+                        type: "error",
+                        text: "Mohon isi semua data!",
+                    });
+                    return;
+                }
+
+                const values = form.getValues();
+
+                webix.message("Memproses login...");
+
+                webix
+                    .ajax()
+                    .headers({ "Content-Type": "application/json" })
+                    .post("/auth/login", JSON.stringify(values))
+                    .then((res) => {
+                        const data = res.json();
+                        if (data.ok) {
+                            window.location.href = data.redirect;
+                        } else {
+                            webix.message({
+                                type: "error",
+                                text: data.message,
+                            });
+                        }
+                    })
+                    .catch(() => {
+                        webix.message({
+                            type: "error",
+                            text: "Username atau Password salah",
+                        });
+                    });
+            }
+        </script>
+    </body>
+</html>

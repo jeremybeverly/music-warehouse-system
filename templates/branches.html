@@ -1,0 +1,310 @@
+{% extends "base.html" %} {% block content %}
+<div class="topbar">
+    <h2>Kantor Cabang</h2>
+</div>
+
+<div
+    id="webix_branches"
+    style="
+        height: calc(100vh - 120px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        overflow: hidden;
+    "
+></div>
+
+<script>
+    const userRole = "{{ user.role if user else '' }}";
+    const columns = [
+        {
+            id: "rank",
+            header: "No",
+            width: 50,
+            css: { "text-align": "center" },
+            template: function (obj) {
+                return $$("branchTable").getIndexById(obj.id) + 1;
+            },
+        },
+        {
+            id: "branch_code",
+            header: "Kode",
+            width: 100,
+            sort: "string",
+            css: { "font-weight": "500" },
+        },
+        {
+            id: "name",
+            header: "Nama Cabang",
+            fillspace: true,
+            sort: "string",
+            template:
+                "#name# <br> <span style='color:#777; font-size:12px;'>Ka. Toko: #manager_name#</span>",
+        },
+        {
+            id: "email",
+            header: "Email",
+            fillspace: true,
+            sort: "string",
+        },
+        {
+            id: "address",
+            header: "Alamat",
+            fillspace: true,
+            sort: "string",
+        },
+        {
+            id: "manager_name",
+            header: "Nama Manager",
+            width: 140,
+            sort: "string",
+        },
+        { id: "contact", header: "Kontak", width: 140, sort: "string" },
+        {
+            id: "created_at_fmt",
+            header: "Tggl Ditambah",
+            width: 125,
+            css: { "text-align": "center" },
+        },
+    ];
+
+    if (userRole === "warehouse_admin") {
+        columns.push({
+            id: "actions",
+            header: "Aksi",
+            width: 100,
+            css: { "text-align": "center" },
+            template: `
+                <span class='webix_icon wxi-pencil' style='cursor:pointer; color:#3b82f6; margin-right:8px;' onclick="openEditForm('#id#')"></span>
+                <span class='webix_icon wxi-trash' style='cursor:pointer; color:#f46a6a;' onclick="deleteBranch('#id#')"></span>
+            `,
+        });
+    }
+
+    const toolbarElements = [
+        {
+            view: "search",
+            id: "searchBar",
+            placeholder: "Cari cabang...",
+            width: 300,
+            on: {
+                onTimedKeyPress: function () {
+                    const value = this.getValue().toLowerCase();
+                    $$("branchTable").filter(function (obj) {
+                        return [
+                            obj.name,
+                            obj.branch_code,
+                            obj.contact,
+                            obj.manager_name,
+                        ]
+                            .join(" ")
+                            .toLowerCase()
+                            .includes(value);
+                    });
+                },
+            },
+        },
+        {},
+    ];
+
+    if (userRole === "warehouse_admin") {
+        toolbarElements.push({
+            view: "button",
+            value: "Tambah Cabang",
+            width: 160,
+            css: "custom_primary",
+            icon: "wxi-plus",
+            click: openAddForm,
+        });
+    }
+
+    const toolbar = {
+        view: "toolbar",
+        css: "white_bg",
+        borderless: true,
+        paddingY: 10,
+        paddingX: 15,
+        elements: toolbarElements,
+    };
+
+    const sideMenu = {
+        view: "sidemenu",
+        id: "branchSide",
+        width: 450,
+        position: "right",
+        css: "webix_sidemenu",
+        body: {
+            view: "form",
+            id: "branchForm",
+            padding: 24,
+            elementsConfig: { labelPosition: "top", marginBottom: 15 },
+            elements: [
+                {
+                    id: "formHeader",
+                    type: "header",
+                    template: "Kantor Cabang Baru",
+                    css: "webix_header",
+                    borderless: true,
+                },
+                { view: "text", name: "_id", hidden: true },
+                {
+                    view: "text",
+                    name: "name",
+                    label: "Nama Cabang",
+                    required: true,
+                },
+                {
+                    view: "text",
+                    name: "manager_name",
+                    label: "Kepala Toko (Manager)",
+                },
+                {
+                    view: "text",
+                    name: "contact",
+                    label: "No. Telepon",
+                },
+                { view: "text", name: "email", label: "Email" },
+                {
+                    view: "textarea",
+                    name: "address",
+                    label: "Alamat Lengkap",
+                    height: 80,
+                },
+
+                { height: 20 },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            value: "Simpan",
+                            css: "custom_primary",
+                            height: 45,
+                            click: saveBranchData,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            value: "Batal",
+                            css: "custom_secondary",
+                            height: 45,
+                            click: () => $$("branchSide").hide(),
+                        },
+                    ],
+                },
+            ],
+            rules: {
+                name: webix.rules.isNotEmpty,
+            },
+        },
+    };
+
+    webix.ready(function () {
+        webix.ui({
+            container: "webix_branches",
+            rows: [
+                toolbar,
+                {
+                    view: "datatable",
+                    id: "branchTable",
+                    columns: columns,
+                    url: "/api/branches/",
+                    hover: "my_hover",
+                    select: "row",
+                    rowHeight: 50,
+                },
+            ],
+        });
+        webix.ui(sideMenu);
+    });
+
+    function openAddForm() {
+        if (userRole !== "warehouse_admin") return;
+        $$("branchForm").clear();
+        $$("formHeader").setHTML("Kantor Cabang Baru");
+        $$("branchSide").show();
+    }
+
+    window.openEditForm = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        const item = $$("branchTable").getItem(id);
+        if (item) {
+            $$("branchForm").setValues(item);
+            $$("formHeader").setHTML("Edit Cabang");
+            $$("branchSide").show();
+        }
+    };
+
+    function saveBranchData() {
+        const form = $$("branchForm");
+        if (!form.validate())
+            return webix.message({
+                type: "error",
+                text: "Nama cabang wajib diisi",
+            });
+
+        const values = form.getValues();
+        const isUpdate = !!values._id;
+        const method = isUpdate ? "PUT" : "POST";
+        const url = isUpdate ? `/api/branches/${values._id}` : "/api/branches/";
+
+        if (!isUpdate) delete values._id;
+
+        webix
+            .ajax()
+            .headers({ "Content-Type": "application/json" })
+            [method.toLowerCase()](url, JSON.stringify(values))
+            .then(() => {
+                webix.message(
+                    isUpdate ? "Cabang diupdate" : "Cabang ditambahkan",
+                );
+                $$("branchTable").clearAll();
+                $$("branchTable").load("/api/branches/");
+                $$("branchSide").hide();
+            })
+            .catch((err) => {
+                const msg = err.response
+                    ? JSON.parse(err.response).error
+                    : "Terjadi Kesalahan";
+                webix.message({ type: "error", text: msg });
+            });
+    }
+
+    window.deleteBranch = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        webix.confirm({
+            title: "Hapus",
+            text: "Yakin hapus cabang ini?",
+            ok: "Ya",
+            cancel: "Batal",
+            callback: function (result) {
+                if (result) {
+                    webix
+                        .ajax()
+                        .del(`/api/branches/${id}`)
+                        .then(() => {
+                            $$("branchTable").remove(id);
+                            webix.message("Cabang dihapus");
+                        });
+                }
+            },
+        });
+    };
+</script>
+
+<style>
+    .custom_primary .webix_button {
+        background-color: #3b82f6 !important;
+        color: white !important;
+        border: none;
+    }
+    .custom_primary .webix_button:hover {
+        background-color: #2563eb !important;
+    }
+    .my_hover {
+        background: #f9fafb;
+    }
+    .white_bg {
+        background: white;
+        border-bottom: 1px solid #eff2f7;
+    }
+</style>
+{% endblock %}

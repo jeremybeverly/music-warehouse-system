@@ -1,0 +1,559 @@
+{% extends "base.html" %} {% block content %}
+<div class="topbar">
+    <h2>Data Barang</h2>
+</div>
+
+<div
+    id="webix_items"
+    style="
+        height: calc(100vh - 120px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        overflow: hidden;
+    "
+></div>
+
+<script>
+    const userRole = "{{ user.role if user else '' }}";
+
+    // --- 1. Filter Popup ---
+    const filterPopup = {
+        view: "popup",
+        id: "filterPopup",
+        width: 400,
+        body: {
+            view: "form",
+            id: "filterForm",
+            padding: 20,
+            elements: [
+                { type: "section", template: "Kategori & Merek" },
+                {
+                    view: "combo",
+                    name: "category",
+                    label: "Kategori",
+                    labelWidth: 80,
+                    options: [],
+                    id: "filterCategoryInput",
+                },
+                {
+                    view: "combo",
+                    name: "brand",
+                    label: "Merek",
+                    labelWidth: 80,
+                    options: [],
+                    id: "filterBrandInput",
+                },
+
+                { height: 15 },
+                { type: "section", template: "Rentang Harga" },
+                {
+                    cols: [
+                        {
+                            view: "slider",
+                            id: "priceMin",
+                            label: "Min",
+                            labelWidth: 40,
+                            min: 0,
+                            max: 20000000,
+                            step: 500000,
+                            value: 0,
+                            title: function (obj) {
+                                return window.formatRupiah(obj.value);
+                            },
+                        },
+                        { width: 10 },
+                        {
+                            view: "slider",
+                            id: "priceMax",
+                            label: "Max",
+                            labelWidth: 40,
+                            min: 0,
+                            max: 20000000,
+                            step: 500000,
+                            value: 20000000,
+                            title: function (obj) {
+                                return window.formatRupiah(obj.value);
+                            },
+                        },
+                    ],
+                },
+
+                { height: 10 },
+                { type: "section", template: "Rentang Stok" },
+                {
+                    cols: [
+                        {
+                            view: "slider",
+                            id: "stockMin",
+                            label: "Min",
+                            labelWidth: 40,
+                            min: 0,
+                            max: 100,
+                            value: 0,
+                            title: "#value#",
+                        },
+                        { width: 10 },
+                        {
+                            view: "slider",
+                            id: "stockMax",
+                            label: "Max",
+                            labelWidth: 40,
+                            min: 0,
+                            max: 100,
+                            value: 100,
+                            title: "#value#",
+                        },
+                    ],
+                },
+
+                { height: 20 },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            value: "Reset",
+                            css: "custom_secondary",
+                            click: function () {
+                                $$("filterForm").clear();
+                                $$("priceMin").setValue(0);
+                                $$("priceMax").setValue(20000000);
+                                $$("stockMin").setValue(0);
+                                $$("stockMax").setValue(100);
+                                applyFilters();
+                            },
+                        },
+                        {
+                            view: "button",
+                            value: "Terapkan",
+                            css: "custom_primary",
+                            click: function () {
+                                $$("filterPopup").hide();
+                                applyFilters();
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    // --- 2. Main Columns ---
+    const columns = [
+        {
+            id: "rank",
+            header: "No",
+            width: 50,
+            css: { "text-align": "center" },
+            template: (obj) => $$("itemTable").getIndexById(obj.id) + 1,
+        },
+        {
+            id: "item_code",
+            header: "Kode",
+            width: 160,
+            css: { "font-weight": "500" },
+        },
+        { id: "name", header: "Nama Barang", fillspace: true },
+        { id: "brand", header: "Merek", width: 120 },
+        {
+            id: "category",
+            header: "Kategori",
+            width: 120,
+            template:
+                "<span style='font-weight:500; color:#556ee6'>#category#</span>",
+        },
+        {
+            id: "price",
+            header: "Harga",
+            width: 130,
+            template: function (obj) {
+                return window.formatRupiah(obj.price);
+            },
+        },
+        {
+            id: "stock",
+            header: "Stok",
+            width: 80,
+            css: { "text-align": "center" },
+        },
+        {
+            id: "status_stok",
+            header: "Info",
+            width: 130,
+            css: { "text-align": "center" },
+            template: function (obj) {
+                // [FIX] "Soft Badge" Style (Light BG + Dark Text)
+                const status = (obj.status_stok || "").toLowerCase().trim();
+                let style = "color:#34c38f; background:#ecfdf5;"; // Default Green
+                let label = "AMAN";
+
+                if (status === "kosong") {
+                    style = "color:#f46a6a; background:#fef2f2;"; // Red
+                    label = "KOSONG";
+                } else if (status === "stok sedikit") {
+                    style = "color:#f1b44c; background:#fff8e1;"; // Orange
+                    label = "MENIPIS";
+                }
+
+                return `<span style='${style} padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700;'>${label}</span>`;
+            },
+        },
+        {
+            id: "created_at_fmt",
+            header: "Tanggal Ditambahkan",
+            width: 180,
+            css: { "text-align": "center" },
+        },
+    ];
+
+    if (userRole === "warehouse_admin") {
+        columns.push({
+            id: "actions",
+            header: "Aksi",
+            width: 100,
+            css: { "text-align": "center" },
+            template: `
+                <span class='webix_icon wxi-pencil' style='cursor:pointer; color:#3b82f6; margin-right:8px;' onclick="openEditForm('#_id#')"></span>
+                <span class='webix_icon wxi-trash' style='cursor:pointer; color:#f46a6a;' onclick="deleteItem('#_id#')"></span>
+            `,
+        });
+    }
+
+    // --- 3. Toolbar ---
+    const toolbarElements = [
+        {
+            view: "icon",
+            value: "Filter",
+            icon: "wxi-filter",
+            css: "custom_secondary",
+            popup: "filterPopup",
+        },
+        { width: 10 },
+        {
+            view: "search",
+            id: "searchBar",
+            placeholder: "Cari nama/kode...",
+            width: 250,
+            on: { onTimedKeyPress: applyFilters },
+        },
+        {},
+    ];
+
+    if (userRole === "warehouse_admin") {
+        toolbarElements.push({
+            view: "button",
+            value: "Tambah Barang",
+            width: 150,
+            css: "custom_primary",
+            icon: "wxi-plus",
+            click: openAddForm,
+        });
+    }
+
+    // --- 4. Sidebar Form (Add/Edit) ---
+    const sideMenu = {
+        view: "sidemenu",
+        id: "itemsSideMenu",
+        width: 450,
+        position: "right",
+        css: "webix_sidemenu",
+        body: {
+            view: "form",
+            id: "itemForm",
+            padding: 24,
+            elementsConfig: { labelPosition: "top", marginBottom: 15 },
+            elements: [
+                {
+                    type: "header",
+                    template: "Barang",
+                    css: "webix_header",
+                    borderless: true,
+                },
+                { view: "text", name: "_id", hidden: true },
+                {
+                    view: "text",
+                    name: "name",
+                    label: "Nama Barang",
+                    required: true,
+                },
+
+                // [FIX] Split Layout: Combo + Add Button
+                {
+                    cols: [
+                        {
+                            view: "combo",
+                            id: "brandField",
+                            name: "brand",
+                            label: "Merek",
+                            options: [],
+                            placeholder: "Pilih Merek",
+                            gravity: 3,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            type: "icon",
+                            icon: "wxi-plus",
+                            css: "webix_primary",
+                            width: 40,
+                            tooltip: "Tambah Merek Baru",
+                            click: () =>
+                                addNewMasterData(
+                                    "brands",
+                                    "Merek",
+                                    "brandField",
+                                ),
+                        },
+                    ],
+                },
+                {
+                    cols: [
+                        {
+                            view: "combo",
+                            id: "categoryField",
+                            name: "category",
+                            label: "Kategori",
+                            options: [],
+                            placeholder: "Pilih Kategori",
+                            gravity: 3,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            type: "icon",
+                            icon: "wxi-plus",
+                            css: "webix_primary",
+                            width: 40,
+                            tooltip: "Tambah Kategori Baru",
+                            click: () =>
+                                addNewMasterData(
+                                    "categories",
+                                    "Kategori",
+                                    "categoryField",
+                                ),
+                        },
+                    ],
+                },
+
+                {
+                    cols: [
+                        {
+                            view: "text",
+                            name: "price",
+                            label: "Harga",
+                            required: true,
+                            type: "number",
+                        },
+                        { width: 15 },
+                        {
+                            view: "text",
+                            name: "stock",
+                            label: "Stok Awal",
+                            required: true,
+                            type: "number",
+                        },
+                    ],
+                },
+                { height: 20 },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            value: "Simpan",
+                            css: "custom_primary",
+                            height: 45,
+                            click: saveItemData,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            value: "Batal",
+                            css: "custom_secondary",
+                            height: 45,
+                            click: () => $$("itemsSideMenu").hide(),
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    // --- 5. Init & Logic ---
+    webix.ready(function () {
+        webix.ui(filterPopup);
+        webix.ui({
+            container: "webix_items",
+            rows: [
+                {
+                    view: "toolbar",
+                    css: "white_bg",
+                    borderless: true,
+                    paddingY: 10,
+                    paddingX: 15,
+                    elements: toolbarElements,
+                },
+                {
+                    view: "datatable",
+                    id: "itemTable",
+                    columns: columns,
+                    url: "/api/items/",
+                    hover: "my_hover",
+                    select: "row",
+                    css: "webix_data_border webix_header_border",
+                    rowHeight: 50,
+                },
+            ],
+        });
+        webix.ui(sideMenu);
+        loadLookups();
+    });
+
+    function loadLookups() {
+        // [FIX] Map ID to Name ensuring dropdowns save text
+        webix
+            .ajax()
+            .get("/api/brands/")
+            .then((res) => {
+                const data = res
+                    .json()
+                    .map((b) => ({ id: b.name, value: b.name }));
+                $$("brandField").getPopup().getList().clearAll();
+                $$("brandField").getPopup().getList().parse(data);
+
+                $$("filterBrandInput").getPopup().getList().clearAll();
+                $$("filterBrandInput").getPopup().getList().parse(data);
+            });
+        webix
+            .ajax()
+            .get("/api/categories/")
+            .then((res) => {
+                const data = res
+                    .json()
+                    .map((c) => ({ id: c.name, value: c.name }));
+                $$("categoryField").getPopup().getList().clearAll();
+                $$("categoryField").getPopup().getList().parse(data);
+
+                $$("filterCategoryInput").getPopup().getList().clearAll();
+                $$("filterCategoryInput").getPopup().getList().parse(data);
+            });
+    }
+
+    // [FIX] Logic to Add New Brand/Category via Popup
+    function addNewMasterData(endpoint, label, fieldId) {
+        webix
+            .prompt({
+                title: `Tambah ${label} Baru`,
+                text: `Masukkan nama ${label}:`,
+                ok: "Simpan",
+                cancel: "Batal",
+                input: { required: true },
+            })
+            .then(function (result) {
+                if (!result) return;
+
+                // Send to Backend
+                webix
+                    .ajax()
+                    .headers({ "Content-Type": "application/json" })
+                    .post(`/api/${endpoint}/`, JSON.stringify({ name: result }))
+                    .then(() => {
+                        webix.message(`✅ ${label} berhasil ditambahkan`);
+                        loadLookups(); // Reload dropdowns
+                        // Auto-select the new value
+                        $$(fieldId).setValue(result);
+                    })
+                    .catch((err) => {
+                        let msg = "Error";
+                        try {
+                            msg = JSON.parse(err.response).error;
+                        } catch (e) {}
+                        webix.message({ type: "error", text: msg });
+                    });
+            });
+    }
+
+    function applyFilters() {
+        const formValues = $$("filterForm").getValues();
+
+        formValues.min_price = $$("priceMin").getValue();
+        formValues.max_price = $$("priceMax").getValue();
+        formValues.min_stock = $$("stockMin").getValue();
+        formValues.max_stock = $$("stockMax").getValue();
+
+        formValues.search = $$("searchBar").getValue();
+        formValues._t = Date.now();
+
+        $$("itemTable").clearAll();
+        $$("itemTable").load(() => webix.ajax().get("/api/items/", formValues));
+    }
+
+    function openAddForm() {
+        if (userRole !== "warehouse_admin") return;
+        $$("itemForm").clear();
+        $$("itemsSideMenu").show();
+    }
+
+    window.openEditForm = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        const item = $$("itemTable").getItem(id);
+        if (item) {
+            $$("itemForm").setValues(item);
+            $$("itemsSideMenu").show();
+        }
+    };
+
+    function saveItemData() {
+        const form = $$("itemForm");
+        if (!form.validate())
+            return webix.message({ type: "error", text: "Lengkapi data!" });
+
+        const values = form.getValues();
+        const isUpdate = !!values._id;
+        const method = isUpdate ? "PUT" : "POST";
+        const url = isUpdate ? `/api/items/${values._id}` : "/api/items/";
+
+        if (!isUpdate) delete values._id;
+        values.price = parseFloat(values.price);
+        values.stock = parseInt(values.stock);
+
+        webix
+            .ajax()
+            .headers({ "Content-Type": "application/json" })
+            [method.toLowerCase()](url, JSON.stringify(values))
+            .then(() => {
+                webix.message(
+                    isUpdate ? "✅ Data diupdate" : "✅ Data ditambahkan",
+                );
+                applyFilters();
+                $$("itemsSideMenu").hide();
+            })
+            .catch((err) =>
+                webix.message({ type: "error", text: "Error Saving" }),
+            );
+    }
+
+    window.deleteItem = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        webix.confirm({
+            title: "Hapus",
+            text: "Yakin hapus? Item akan hilang juga dari semua cabang.",
+            ok: "Ya, Hapus",
+            cancel: "Batal",
+            callback: function (result) {
+                if (result) {
+                    webix
+                        .ajax()
+                        .del(`/api/items/${id}`)
+                        .then(() => {
+                            webix.message("🗑️ Barang dihapus permanen");
+                            applyFilters();
+                        })
+                        .catch((err) => {
+                            let msg = JSON.parse(err.response).error;
+                            webix.message({ type: "error", text: msg });
+                        });
+                }
+            },
+        });
+    };
+</script>
+{% endblock %}

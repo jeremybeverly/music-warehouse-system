@@ -1,0 +1,370 @@
+{% extends "base.html" %} {% block content %}
+<div class="topbar">
+    <h2>Data Supplier</h2>
+</div>
+
+<div
+    id="webix_suppliers"
+    style="
+        height: calc(100vh - 120px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        overflow: hidden;
+    "
+></div>
+
+<script>
+    const userRole = "{{ user.role if user else '' }}";
+
+    const columns = [
+        {
+            id: "rank",
+            header: "No",
+            width: 40,
+            css: { "text-align": "center" },
+            template: function (obj) {
+                return $$("supplierTable").getIndexById(obj.id) + 1;
+            },
+        },
+        {
+            id: "supplier_code",
+            header: "Kode",
+            width: 90,
+            sort: "string",
+            css: { "font-weight": "500" },
+        },
+        {
+            id: "name",
+            header: "Nama Perusahaan",
+            fillspace: true,
+            sort: "string",
+            template:
+                "#name# <br> <span style='color:#777; font-size:12px;'>PIC: #pic_name#</span>",
+        },
+        {
+            id: "pic_name",
+            header: "Nama PIC",
+            width: 120,
+            sort: "string",
+        },
+        {
+            id: "address",
+            header: "Alamat",
+            fillspace: true,
+            sort: "string",
+        },
+        { id: "contact", header: "Kontak", width: 110, sort: "string" },
+        {
+            id: "bank_summary",
+            header: "Bank",
+            width: 130,
+        },
+        {
+            id: "created_at_fmt",
+            width: 125,
+            header: "Tggl Ditambah",
+            css: { "text-align": "center" },
+        },
+        {
+            id: "status",
+            header: "Status",
+            width: 80,
+            css: { "text-align": "center" },
+            template: function (obj) {
+                if (obj.status === "Tidak Aktif")
+                    return "<span style='color:#f46a6a; background:#fef2f2; padding:3px 8px; border-radius:4px; font-size:11px;'>Tidak Aktif</span>";
+                return "<span style='color:#34c38f; background:#ecfdf5; padding:3px 8px; border-radius:4px; font-size:11px;'>Aktif</span>";
+            },
+        },
+    ];
+
+    if (userRole === "warehouse_admin") {
+        columns.push({
+            id: "actions",
+            header: "Aksi",
+            width: 100,
+            css: { "text-align": "center" },
+            template: `
+                <span class='webix_icon wxi-pencil' style='cursor:pointer; color:#3b82f6; margin-right:8px;' onclick="openEditForm('#id#')"></span>
+                <span class='webix_icon wxi-trash' style='cursor:pointer; color:#f46a6a;' onclick="deleteSupplier('#id#')"></span>
+            `,
+        });
+    }
+
+    const toolbarElements = [
+        {
+            view: "combo",
+            id: "filterStatus",
+            width: 150,
+            placeholder: "Filter Status",
+            value: "Semua",
+            options: ["Semua", "Aktif", "Tidak Aktif"],
+            on: { onChange: applyFilter },
+        },
+        {
+            width: 10,
+        },
+        {
+            view: "search",
+            id: "searchBar",
+            placeholder: "Cari supplier...",
+            width: 300,
+            on: {
+                onTimedKeyPress: function () {
+                    const value = this.getValue().toLowerCase();
+                    $$("supplierTable").filter(function (obj) {
+                        return [
+                            obj.name,
+                            obj.supplier_code,
+                            obj.contact,
+                            obj.pic_name,
+                        ]
+                            .join(" ")
+                            .toLowerCase()
+                            .includes(value);
+                    });
+                },
+            },
+        },
+        {},
+    ];
+
+    // [SECURITY UI] Only Warehouse Admin sees "Add" button
+    if (userRole === "warehouse_admin") {
+        toolbarElements.push({
+            view: "button",
+            value: "Tambah Supplier",
+            width: 160,
+            css: "custom_primary",
+            icon: "wxi-plus",
+            click: openAddForm,
+        });
+    }
+
+    const toolbar = {
+        view: "toolbar",
+        css: "white_bg",
+        borderless: true,
+        paddingY: 10,
+        paddingX: 15,
+        elements: toolbarElements,
+    };
+
+    const sideMenu = {
+        view: "sidemenu",
+        id: "supplierSide",
+        width: 450,
+        position: "right",
+        css: "webix_sidemenu",
+        body: {
+            view: "form",
+            id: "supplierForm",
+            padding: 24,
+            elementsConfig: { labelPosition: "top", marginBottom: 15 },
+            scroll: "y",
+            elements: [
+                {
+                    id: "formHeader",
+                    type: "header",
+                    template: "Tambah Supplier",
+                    css: "webix_header",
+                    borderless: true,
+                },
+                { view: "text", name: "_id", hidden: true },
+
+                {
+                    view: "text",
+                    name: "name",
+                    label: "Nama Perusahaan",
+                    required: true,
+                },
+                {
+                    cols: [
+                        {
+                            view: "text",
+                            name: "pic_name",
+                            label: "Nama PIC (Sales)",
+                        },
+                        { width: 15 },
+                        { view: "text", name: "contact", label: "Kontak / HP" },
+                    ],
+                },
+
+                { view: "text", name: "email", label: "Email" },
+                {
+                    view: "textarea",
+                    name: "address",
+                    label: "Alamat Lengkap",
+                    height: 80,
+                },
+                { type: "section", template: "Info Bank" },
+                {
+                    cols: [
+                        { view: "text", name: "bank_name", label: "Nama Bank" },
+                        { width: 15 },
+                        {
+                            view: "text",
+                            name: "account_number",
+                            label: "No. Rekening",
+                        },
+                    ],
+                },
+                {
+                    view: "combo",
+                    name: "status",
+                    label: "Status",
+                    options: ["Aktif", "Tidak Aktif"],
+                    value: "Aktif",
+                },
+
+                { height: 20 },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            value: "Simpan",
+                            css: "custom_primary",
+                            height: 45,
+                            click: saveSupplierData,
+                        },
+                        { width: 10 },
+                        {
+                            view: "button",
+                            value: "Batal",
+                            css: "custom_secondary",
+                            height: 45,
+                            click: () => $$("supplierSide").hide(),
+                        },
+                    ],
+                },
+            ],
+            rules: {
+                name: webix.rules.isNotEmpty,
+            },
+        },
+    };
+
+    webix.ready(function () {
+        webix.ui({
+            container: "webix_suppliers",
+            rows: [
+                toolbar,
+                {
+                    view: "datatable",
+                    id: "supplierTable",
+                    columns: columns,
+                    url: "/api/suppliers/",
+                    select: "row",
+                    rowHeight: 50,
+                    hover: "my_hover",
+                },
+            ],
+        });
+        webix.ui(sideMenu);
+    });
+
+    function applyFilter() {
+        const text = $$("searchBar").getValue().toLowerCase();
+        const status = $$("filterStatus").getValue();
+
+        $$("supplierTable").filter(function (obj) {
+            // 1. Text Search
+            const textMatch = [
+                obj.name,
+                obj.supplier_code,
+                obj.contact,
+                obj.pic_name,
+            ]
+                .join(" ")
+                .toLowerCase()
+                .includes(text);
+
+            const statusMatch = status === "Semua" || obj.status === status;
+
+            return textMatch && statusMatch;
+        });
+    }
+
+    function openAddForm() {
+        if (userRole !== "warehouse_admin") return;
+        $$("supplierForm").clear();
+        $$("formHeader").setHTML("Tambah Supplier");
+        $$("supplierSide").show();
+    }
+
+    window.openEditForm = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        const item = $$("supplierTable").getItem(id);
+        if (item) {
+            let formData = webix.copy(item);
+            if (item.bank_details) {
+                formData.bank_name = item.bank_details.bank_name;
+                formData.account_number = item.bank_details.account_number;
+            }
+
+            $$("supplierForm").setValues(formData);
+            $$("formHeader").setHTML("Edit Supplier");
+            $$("supplierSide").show();
+        }
+    };
+
+    function saveSupplierData() {
+        const form = $$("supplierForm");
+        if (!form.validate())
+            return webix.message({
+                type: "error",
+                text: "Nama perusahaan wajib diisi",
+            });
+
+        const values = form.getValues();
+        const isUpdate = !!values._id;
+        const method = isUpdate ? "PUT" : "POST";
+        const url = isUpdate
+            ? `/api/suppliers/${values._id}`
+            : "/api/suppliers/";
+
+        if (!isUpdate) delete values._id;
+
+        webix
+            .ajax()
+            .headers({ "Content-Type": "application/json" })
+            [method.toLowerCase()](url, JSON.stringify(values))
+            .then(() => {
+                webix.message(
+                    isUpdate ? "Supplier diupdate" : "Supplier ditambahkan",
+                );
+                $$("supplierTable").clearAll();
+                $$("supplierTable").load("/api/suppliers/");
+                $$("supplierSide").hide();
+            })
+            .catch((err) => {
+                const msg = err.response
+                    ? JSON.parse(err.response).error
+                    : "Terjadi Kesalahan";
+                webix.message({ type: "error", text: msg });
+            });
+    }
+
+    window.deleteSupplier = function (id) {
+        if (userRole !== "warehouse_admin") return;
+        webix.confirm({
+            title: "Hapus",
+            text: "Yakin hapus supplier ini?",
+            ok: "Ya",
+            cancel: "Batal",
+            callback: function (result) {
+                if (result) {
+                    webix
+                        .ajax()
+                        .del(`/api/suppliers/${id}`)
+                        .then(() => {
+                            $$("supplierTable").remove(id);
+                            webix.message("Supplier dihapus");
+                        });
+                }
+            },
+        });
+    };
+</script>
+
+{% endblock %}

@@ -1,0 +1,359 @@
+{% extends "base.html" %} {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="dashboard-container">
+    <div class="dash-header">
+        <h2>Halo, {{ user.name if user else '' }}</h2>
+        <span class="date-badge" id="currentDate"></span>
+    </div>
+
+    <div class="stats-grid">
+        <div class="card stat-card blue">
+            <div class="icon"><i class="mdi mdi-package-variant"></i></div>
+            <div class="info">
+                <h3 id="val_stock">...</h3>
+                <p>Total Aset Fisik</p>
+            </div>
+        </div>
+
+        <div class="card stat-card orange">
+            <div class="icon"><i class="mdi mdi-alert-outline"></i></div>
+            <div class="info">
+                <h3 id="val_low">...</h3>
+                <p>Stok Perlu Restock</p>
+            </div>
+        </div>
+
+        <div class="card stat-card purple">
+            <div class="icon"><i class="mdi mdi-clock-outline"></i></div>
+            <div class="info">
+                <h3 id="val_pending">...</h3>
+                <p>Menunggu Persetujuan</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="card chart-section">
+            <div class="card-header">
+                <h4>Aktivitas Gudang (IN dan OUT)</h4>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="flowChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card list-section">
+            <div class="card-header">
+                <h4>Riwayat Transaksi</h4>
+                <a href="/invoices" class="see-all">Lihat Semua</a>
+            </div>
+            <table class="simple-table">
+                <thead>
+                    <tr>
+                        <th>Kode</th>
+                        <th>Status</th>
+                        <th>Tanggal</th>
+                    </tr>
+                </thead>
+                <tbody id="recentList">
+                    <tr>
+                        <td colspan="3" style="text-align: center">
+                            Loading data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById("currentDate").innerText =
+        new Date().toLocaleDateString("id-ID", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+        });
+
+    fetch("/api/dashboard/stats")
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = "/auth/login";
+                return null;
+            }
+            return res.json();
+        })
+        .then((data) => {
+            document.getElementById("val_stock").innerText = data.total_stock;
+            document.getElementById("val_low").innerText = data.low_stock_count;
+            document.getElementById("val_pending").innerText =
+                data.pending_count;
+
+            const tbody = document.getElementById("recentList");
+            tbody.innerHTML = "";
+            if (data.recent_tx.length === 0) {
+                tbody.innerHTML =
+                    "<tr><td colspan='3' style='text-align:center; color:#999;'>Belum ada transaksi</td></tr>";
+            } else {
+                data.recent_tx.forEach((tx) => {
+                    let badgeClass = "badge-gray";
+                    if (tx.status === "DITERIMA") badgeClass = "badge-green";
+                    if (tx.status.includes("PENDING"))
+                        badgeClass = "badge-orange";
+                    if (tx.status === "DITOLAK") badgeClass = "badge-red";
+
+                    const row = `
+                                            <tr>
+                                                <td>
+                                                    <div class="tx-code">${tx.code}</div>
+                                                    <div class="tx-type">${tx.type}</div>
+                                                </td>
+                                                <td><span class="badge ${badgeClass}">${tx.status}</span></td>
+                                                <td class="tx-date">${tx.date}</td>
+                                            </tr>
+                                        `;
+                    tbody.innerHTML += row;
+                });
+            }
+
+            initChart(data.chart_labels, data.chart_values);
+        })
+        .catch((err) => console.error(err));
+
+    function initChart(labels, values) {
+        const ctx = document.getElementById("flowChart").getContext("2d");
+        new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "Jumlah Transaksi",
+                        data: values,
+                        backgroundColor: ["#10b981", "#f59e0b"],
+                        borderRadius: 6,
+                        barThickness: 50,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { borderDash: [2, 4] },
+                    },
+                    x: {
+                        grid: { display: false },
+                    },
+                },
+            },
+        });
+    }
+</script>
+
+<style>
+    .dashboard-container {
+        padding: 0;
+        font-family: "Inter", sans-serif;
+        color: #333;
+    }
+
+    .dash-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+    }
+    .dash-header h2 {
+        margin: 0;
+        font-size: 24px;
+        color: #1f2937;
+        font-weight: 700;
+    }
+    .date-badge {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #4b5563;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+        margin-bottom: 24px;
+    }
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr; /* Chart takes more space */
+        gap: 24px;
+        min-height: 400px;
+    }
+
+    /* Cards */
+    .card {
+        background: white;
+        border-radius: 16px;
+        box-shadow:
+            0 4px 6px -1px rgba(0, 0, 0, 0.05),
+            0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        overflow: hidden;
+        border: 1px solid #f3f4f6;
+        transition: transform 0.2s;
+    }
+
+    .stat-card {
+        display: flex;
+        align-items: center;
+        padding: 24px;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .stat-card .icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        margin-right: 20px;
+    }
+
+    .stat-card.blue .icon {
+        background: #eff6ff;
+        color: #3b82f6;
+    }
+    .stat-card.orange .icon {
+        background: #fff7ed;
+        color: #f97316;
+    }
+    .stat-card.purple .icon {
+        background: #f3e8ff;
+        color: #9333ea;
+    } /* New Purple Theme */
+
+    .stat-card h3 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 800;
+        color: #111827;
+        letter-spacing: -1px;
+    }
+    .stat-card p {
+        margin: 4px 0 0 0;
+        color: #6b7280;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .card-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .card-header h4 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: #374151;
+    }
+    .see-all {
+        font-size: 13px;
+        color: #3b82f6;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .chart-wrapper {
+        padding: 24px;
+        height: 320px;
+        position: relative;
+    }
+
+    .simple-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .simple-table th {
+        text-align: left;
+        padding: 14px 24px;
+        font-size: 12px;
+        color: #6b7280;
+        background: #f9fafb;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .simple-table td {
+        padding: 16px 24px;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 14px;
+    }
+    .simple-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .tx-code {
+        font-weight: 600;
+        color: #111827;
+    }
+    .tx-type {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 4px;
+        font-weight: 500;
+    }
+    .tx-date {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+
+    .badge {
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .badge-green {
+        background: #ecfdf5;
+        color: #059669;
+    }
+    .badge-orange {
+        background: #fff7ed;
+        color: #ea580c;
+    }
+    .badge-red {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    .badge-gray {
+        background: #f3f4f6;
+        color: #4b5563;
+    }
+
+    @media (max-width: 900px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}

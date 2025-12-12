@@ -1,0 +1,359 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Invoice {{ invoice.invoice_code }}</title>
+        <style>
+            /* Reset & Base */
+            body {
+                font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                color: #333;
+                background: #555; /* Dark background for screen preview */
+            }
+
+            .page {
+                background: white;
+                width: 210mm;
+                min-height: 297mm;
+                margin: 20px auto;
+                padding: 40px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                position: relative;
+                box-sizing: border-box;
+            }
+
+            /* --- PRINT SPECIFIC FIXES --- */
+            @page {
+                size: A4;
+                margin: 0; /* Kills browser default margins */
+            }
+
+            @media print {
+                body {
+                    background: white;
+                }
+                .page {
+                    width: 100%;
+                    margin: 0; /* Remove screen margins */
+                    padding: 20px 40px; /* Adjust padding for print */
+                    box-shadow: none;
+                    min-height: auto; /* Allow height to fit content */
+                    height: auto;
+                    border: none;
+                }
+                .no-print {
+                    display: none !important;
+                }
+                /* Hide URL/Page Number headers if possible */
+                @page {
+                    margin: 0;
+                }
+            }
+            /* --------------------------- */
+
+            /* Header */
+            .header {
+                display: flex;
+                justify-content: space-between;
+                border-bottom: 2px solid #bb1724;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }
+            .logo {
+                font-size: 26px;
+                font-weight: 800;
+                color: #bb1724;
+                letter-spacing: -1px;
+                text-transform: uppercase;
+            }
+            .logo sub {
+                font-size: 11px;
+                font-weight: normal;
+                color: #666;
+                display: block;
+                margin-top: -3px;
+                letter-spacing: 0;
+                text-transform: none;
+            }
+
+            .invoice-title {
+                text-align: right;
+            }
+            .invoice-title h1 {
+                margin: 0;
+                font-size: 24px;
+                color: #333;
+                text-transform: uppercase;
+            }
+            .invoice-title p {
+                margin: 5px 0 0;
+                color: #666;
+                font-size: 14px;
+            }
+
+            /* Info Grid */
+            .info-grid {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 30px;
+            }
+            .info-box h3 {
+                font-size: 10px;
+                color: #999;
+                text-transform: uppercase;
+                margin: 0 0 5px;
+                letter-spacing: 1px;
+                font-weight: 600;
+            }
+            .info-box p {
+                margin: 0;
+                font-size: 13px;
+                font-weight: 600;
+                line-height: 1.4;
+            }
+            .info-box .address {
+                font-weight: normal;
+                color: #555;
+                font-size: 12px;
+            }
+
+            /* Table */
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+            }
+            th {
+                text-align: left;
+                padding: 10px 8px;
+                border-bottom: 2px solid #eee;
+                font-size: 11px;
+                text-transform: uppercase;
+                color: #555;
+                font-weight: 700;
+            }
+            td {
+                padding: 10px 8px;
+                border-bottom: 1px solid #f5f5f5;
+                font-size: 13px;
+            }
+            .text-right {
+                text-align: right;
+            }
+            .text-center {
+                text-align: center;
+            }
+
+            /* Totals */
+            .total-row td {
+                border-bottom: none;
+                font-size: 14px;
+            }
+            .grand-total {
+                border-top: 2px solid #333 !important;
+                font-size: 16px !important;
+                font-weight: 800;
+                color: #bb1724;
+            }
+
+            /* Stamp */
+            .stamp {
+                position: absolute;
+                top: 160px;
+                right: 50px;
+                border: 3px solid #ccc;
+                color: #ccc;
+                font-size: 24px;
+                font-weight: 700;
+                text-transform: uppercase;
+                padding: 10px 20px;
+                transform: rotate(-15deg);
+                opacity: 0.4;
+                border-radius: 8px;
+                z-index: 0;
+                pointer-events: none;
+            }
+            .stamp.lunas {
+                border-color: #10b981;
+                color: #10b981;
+            }
+            .stamp.reject {
+                border-color: #f46a6a;
+                color: #f46a6a;
+            }
+
+            /* Footer */
+            .footer {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 50px;
+                page-break-inside: avoid;
+            }
+            .sign-box {
+                text-align: center;
+                width: 200px;
+            }
+            .sign-line {
+                border-bottom: 1px solid #ccc;
+                height: 70px;
+                margin-bottom: 8px;
+            }
+            .sign-label {
+                font-size: 11px;
+                color: #999;
+                text-transform: uppercase;
+            }
+
+            /* Print Button */
+            .btn-print {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #333;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: bold;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            }
+        </style>
+    </head>
+    <body>
+        <button class="no-print btn-print" onclick="window.print()">
+            🖨️ Cetak
+        </button>
+
+        <div class="page">
+            <div class="header">
+                <div class="logo">
+                    Sentra Musik
+                    <sub>Sistem Manajemen Gudang</sub>
+                </div>
+                <div class="invoice-title">
+                    {% if invoice.type == 'SALE' %}
+                    <h1>NOTA PENJUALAN</h1>
+                    {% elif invoice.type == 'IN' %}
+                    <h1>FAKTUR PEMBELIAN</h1>
+                    {% else %}
+                    <h1>SURAT JALAN</h1>
+                    {% endif %}
+                    <p>#{{ invoice.invoice_code }}</p>
+                </div>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-box">
+                    <h3>Dari (Pengirim)</h3>
+                    {% if invoice.type == 'IN' %}
+                    <p>{{ invoice.supplier_id }}</p>
+                    <p class="address">Supplier Eksternal</p>
+                    {% elif invoice.type == 'SALE' %}
+                    <p>{{ invoice.branch_id }}</p>
+                    <p class="address">Toko Cabang</p>
+                    {% else %}
+                    <p>Gudang Pusat Sentra Musik</p>
+                    <p class="address">Jln. Jend. Sudirman No. 1, Jakarta</p>
+                    {% endif %}
+                </div>
+                <div class="info-box" style="text-align: right">
+                    <h3>Kepada (Penerima)</h3>
+                    {% if invoice.type == 'IN' %}
+                    <p>Gudang Pusat</p>
+                    {% elif invoice.type == 'SALE' %}
+                    <p>Pelanggan (Direct Sale)</p>
+                    <p class="address">Tunai / Debit</p>
+                    {% else %}
+                    <p>{{ invoice.branch_id }}</p>
+                    <p class="address">Internal Transfer</p>
+                    {% endif %}
+
+                    <div style="margin-top: 15px">
+                        <h3>Tanggal</h3>
+                        <p>
+                            {{ invoice.timestamp.strftime('%d %B %Y, %H:%M') }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {% if invoice.status == 'DITERIMA' %}
+            <div class="stamp lunas">SELESAI</div>
+            {% elif invoice.status == 'DITOLAK' %}
+            <div class="stamp reject">DITOLAK</div>
+            {% else %}
+            <div class="stamp">PENDING</div>
+            {% endif %} {% set grand_total = namespace(value=0) %}
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 15%">Kode</th>
+                        <th>Nama Barang</th>
+                        <th class="text-center" style="width: 10%">Jumlah</th>
+                        {% if invoice.type == 'IN' or invoice.type == 'SALE' %}
+                        <th class="text-right" style="width: 20%">Harga</th>
+                        <th class="text-right" style="width: 20%">Subtotal</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in invoice['items'] %}
+                    <tr>
+                        <td>{{ item.item_code }}</td>
+                        <td>{{ item.item_name }}</td>
+                        <td class="text-center">{{ item.quantity }}</td>
+
+                        {% if invoice.type == 'IN' or invoice.type == 'SALE' %}
+                        {% set row_total = item.quantity * item.price_at_time %}
+                        {% set grand_total.value = grand_total.value + row_total
+                        %}
+                        <td class="text-right">
+                            Rp {{
+                            "{:,.0f}".format(item.price_at_time).replace(",",".")
+                            }}
+                        </td>
+                        <td class="text-right">
+                            Rp {{ "{:,.0f}".format(row_total).replace(",",".")
+                            }}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %} {% if invoice.type == 'IN' or invoice.type ==
+                    'SALE' %}
+                    <tr class="total-row">
+                        <td colspan="3"></td>
+                        <td class="text-right grand-total">TOTAL</td>
+                        <td class="text-right grand-total">
+                            Rp {{
+                            "{:,.0f}".format(grand_total.value).replace(",",".")
+                            }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+            <div class="footer">
+                <div class="sign-box">
+                    <p class="sign-label">Dibuat oleh,</p>
+                    <div class="sign-line"></div>
+                    <p><b>{{ invoice.created_by }}</b></p>
+                </div>
+                <div class="sign-box">
+                    <p class="sign-label">Penerima / Penyetuju,</p>
+                    <div class="sign-line"></div>
+                    <p>
+                        <b
+                            >{{ invoice.approved_warehouse_by or
+                            invoice.approved_by_branch or
+                            '........................' }}</b
+                        >
+                    </p>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
