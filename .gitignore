@@ -6,4 +6,3 @@ config.py
 instance/
 *.log
 *.pyc
-seed.py
