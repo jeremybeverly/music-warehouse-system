@@ -122,7 +122,7 @@ music-warehouse-system/
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Auth
 | Method | Endpoint | Deskripsi |
