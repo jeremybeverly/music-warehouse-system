@@ -18,12 +18,12 @@ Sistem manajemen gudang musik berbasis web yang menangani stok barang, distribus
 
 ## Role & Akses
 
-| Role | Deskripsi |
-|---|---|
+| Role              | Deskripsi                                                 |
+| ----------------- | --------------------------------------------------------- |
 | `warehouse_admin` | Akses penuh — approve semua invoice & opname gudang pusat |
-| `warehouse_staff` | Buat invoice IN/OUT, ajukan opname gudang |
-| `branch_admin` | Kelola cabang sendiri — approve invoice & opname cabang |
-| `branch_staff` | Buat invoice SALE/OUT, ajukan opname cabang |
+| `warehouse_staff` | Buat invoice IN/OUT, ajukan opname gudang                 |
+| `branch_admin`    | Kelola cabang sendiri — approve invoice & opname cabang   |
+| `branch_staff`    | Buat invoice SALE/OUT, ajukan opname cabang               |
 
 ---
 
@@ -77,11 +77,11 @@ JWT_SECRET_KEY=ganti_dengan_jwt_key_anda
 
 Ini akan mengisi database dengan data contoh dan akun default:
 
-| Role | Username | Password |
-|---|---|---|
-| Super Admin (Warehouse) | `admin` | `12345678` |
-| Branch Admin | `kepala_jkt` | `12345678` |
-| Branch Staff | `kasir_jkt` | `12345678` |
+| Role                    | Username     | Password   |
+| ----------------------- | ------------ | ---------- |
+| Super Admin (Warehouse) | `admin`      | `12345678` |
+| Branch Admin            | `kepala_jkt` | `12345678` |
+| Branch Staff            | `kasir_jkt`  | `12345678` |
 
 ### 6. Jalankan Aplikasi
 
@@ -125,44 +125,95 @@ music-warehouse-system/
 ## API Endpoints
 
 ### Auth
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `POST` | `/auth/login` | Login, set cookie `token` |
-| `GET` | `/auth/logout` | Logout, hapus sesi |
+
+| Method | Endpoint       | Deskripsi                 |
+| ------ | -------------- | ------------------------- |
+| `POST` | `/auth/login`  | Login, set cookie `token` |
+| `GET`  | `/auth/logout` | Logout, hapus sesi        |
 
 ### Items
-| Method | Endpoint | Akses |
-|---|---|---|
-| `GET` | `/api/items/` | Semua role |
-| `POST` | `/api/items/` | `warehouse_admin` |
-| `PUT` | `/api/items/<id>` | `warehouse_admin` |
+
+| Method   | Endpoint          | Akses             |
+| -------- | ----------------- | ----------------- |
+| `GET`    | `/api/items/`     | Semua role        |
+| `POST`   | `/api/items/`     | `warehouse_admin` |
+| `PUT`    | `/api/items/<id>` | `warehouse_admin` |
 | `DELETE` | `/api/items/<id>` | `warehouse_admin` |
 
 ### Invoices
-| Method | Endpoint | Akses |
-|---|---|---|
-| `GET` | `/api/invoices/` | Semua role |
-| `POST` | `/api/invoices/` | Semua role (tipe terbatas per role) |
-| `POST` | `/api/invoices/<id>/approve` | `branch_admin`, `warehouse_admin` |
-| `POST` | `/api/invoices/<id>/reject` | `branch_admin`, `warehouse_admin` |
-| `DELETE` | `/api/invoices/<id>` | `warehouse_admin` |
+
+| Method   | Endpoint                     | Akses                               |
+| -------- | ---------------------------- | ----------------------------------- |
+| `GET`    | `/api/invoices/`             | Semua role                          |
+| `POST`   | `/api/invoices/`             | Semua role (tipe terbatas per role) |
+| `POST`   | `/api/invoices/<id>/approve` | `branch_admin`, `warehouse_admin`   |
+| `POST`   | `/api/invoices/<id>/reject`  | `branch_admin`, `warehouse_admin`   |
+| `DELETE` | `/api/invoices/<id>`         | `warehouse_admin`                   |
 
 ### Opname
-| Method | Endpoint | Akses |
-|---|---|---|
-| `GET` | `/api/opname/` | Semua role |
-| `POST` | `/api/opname/` | Semua role |
-| `GET` | `/api/opname/pending` | `warehouse_admin`, `branch_admin` |
+
+| Method | Endpoint                   | Akses                             |
+| ------ | -------------------------- | --------------------------------- |
+| `GET`  | `/api/opname/`             | Semua role                        |
+| `POST` | `/api/opname/`             | Semua role                        |
+| `GET`  | `/api/opname/pending`      | `warehouse_admin`, `branch_admin` |
 | `POST` | `/api/opname/approve/<id>` | `warehouse_admin`, `branch_admin` |
-| `POST` | `/api/opname/reject/<id>` | `warehouse_admin`, `branch_admin` |
+| `POST` | `/api/opname/reject/<id>`  | `warehouse_admin`, `branch_admin` |
+
+### Branches
+
+| Method          | Endpoint             | Akses             |
+| --------------- | -------------------- | ----------------- |
+| `GET`           | `/api/branches/`     | Semua role        |
+| `POST`          | `/api/branches/`     | `warehouse_admin` |
+| `PUT` / `PATCH` | `/api/branches/<id>` | `warehouse_admin` |
+| `DELETE`        | `/api/branches/<id>` | `warehouse_admin` |
+
+### Users
+
+| Method   | Endpoint               | Akses                             |
+| -------- | ---------------------- | --------------------------------- |
+| `GET`    | `/api/users/`          | `warehouse_admin`, `branch_admin` |
+| `POST`   | `/api/users/`          | `warehouse_admin`                 |
+| `PUT`    | `/api/users/<user_id>` | `warehouse_admin`                 |
+| `DELETE` | `/api/users/<user_id>` | `warehouse_admin`                 |
+
+### Suppliers
+
+| Method          | Endpoint              | Akses                                |
+| --------------- | --------------------- | ------------------------------------ |
+| `GET`           | `/api/suppliers/`     | `warehouse_admin`, `warehouse_staff` |
+| `POST`          | `/api/suppliers/`     | `warehouse_admin`                    |
+| `PUT` / `PATCH` | `/api/suppliers/<id>` | `warehouse_admin`                    |
+| `DELETE`        | `/api/suppliers/<id>` | `warehouse_admin`                    |
+
+### Brands
+
+| Method | Endpoint        | Akses             |
+| ------ | --------------- | ----------------- |
+| `GET`  | `/api/brands/`  | Semua role        |
+| `POST` | `/api/brands/`  | `warehouse_admin` |
+
+### Categories
+
+| Method | Endpoint             | Akses             |
+| ------ | -------------------- | ----------------- |
+| `GET`  | `/api/categories/`   | Semua role        |
+| `POST` | `/api/categories/`   | `warehouse_admin` |
+
+### Dashboard
+
+| Method | Endpoint               | Akses      |
+| ------ | ---------------------- | ---------- |
+| `GET`  | `/api/dashboard/stats` | Semua role |
 
 ---
 
 ## Tech Stack
 
-| Layer | Teknologi |
-|---|---|
-| Backend | Python 3, Flask |
-| Database | MongoDB Atlas (via PyMongo) |
-| Auth | JWT (PyJWT) + bcrypt |
-| Deployment | Docker / Google Cloud Run |
+| Layer      | Teknologi                   |
+| ---------- | --------------------------- |
+| Backend    | Python 3, Flask             |
+| Database   | MongoDB Atlas (via PyMongo) |
+| Auth       | JWT (PyJWT) + bcrypt        |
+| Deployment | Docker / Google Cloud Run   |
