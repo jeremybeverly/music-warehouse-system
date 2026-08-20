@@ -1,10 +1,10 @@
-# 🎸 Music Warehouse System
+# Music Warehouse System
 
 Sistem manajemen gudang musik berbasis web yang menangani stok barang, distribusi ke cabang, opname inventaris, dan manajemen pengguna. Dibangun dengan **Flask** dan **MongoDB Atlas**.
 
 ---
 
-## 🚀 Fitur Utama
+## Fitur Utama
 
 - **Autentikasi** — Login berbasis JWT dengan sesi tersimpan di database
 - **Manajemen Barang** — CRUD barang dengan filter brand, kategori, harga, dan stok
@@ -16,7 +16,7 @@ Sistem manajemen gudang musik berbasis web yang menangani stok barang, distribus
 
 ---
 
-## 👤 Role & Akses
+## Role & Akses
 
 | Role | Deskripsi |
 |---|---|
@@ -27,7 +27,7 @@ Sistem manajemen gudang musik berbasis web yang menangani stok barang, distribus
 
 ---
 
-## ⚙️ Instalasi Lokal
+## Instalasi Lokal
 
 ### 1. Clone Repository
 
@@ -93,7 +93,7 @@ Akses di browser: **http://127.0.0.1:5000**
 
 ---
 
-## 🗂️ Struktur Proyek
+## Struktur Proyek
 
 ```
 music-warehouse-system/
@@ -158,7 +158,7 @@ music-warehouse-system/
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Teknologi |
 |---|---|
