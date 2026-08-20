@@ -86,6 +86,8 @@ def create_supplier():
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
         suppliers_collection = mongo.get_collection("suppliers")
 
         name = data.get("name", "").strip().upper()
@@ -109,15 +111,15 @@ def create_supplier():
         bank_name = data.get("bank_name", "").strip().upper()
         account_number = str(data.get("account_number", "")).strip()
 
-        if suppliers_collection.find_one(
-            {"bank_name": bank_name, "account_number": account_number}
-        ):
-            return jsonify({"error": "Nomor rekening sudah digunakan"}), 400
-
         if not bank_name:
             return jsonify({"error": "Nama bank wajib"}), 400
         if not account_number.isdigit():
             return jsonify({"error": "Nomor rekening harus angka"}), 400
+
+        if suppliers_collection.find_one(
+            {"bank_name": bank_name, "account_number": account_number}
+        ):
+            return jsonify({"error": "Nomor rekening sudah digunakan"}), 400
 
         code = generate_supplier_code()
         now = get_now_time()
@@ -156,6 +158,8 @@ def update_supplier(id):
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
         suppliers_collection = mongo.get_collection("suppliers")
         oid = ObjectId(id)
 

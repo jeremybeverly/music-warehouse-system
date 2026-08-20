@@ -95,11 +95,14 @@ def get_items():
     min_price = request.args.get("min_price")
     max_price = request.args.get("max_price")
     if min_price or max_price:
-        query_filters["price"] = {}
-        if min_price:
-            query_filters["price"]["$gte"] = float(min_price)
-        if max_price:
-            query_filters["price"]["$lte"] = float(max_price)
+        try:
+            query_filters["price"] = {}
+            if min_price:
+                query_filters["price"]["$gte"] = float(min_price)
+            if max_price:
+                query_filters["price"]["$lte"] = float(max_price)
+        except ValueError:
+            return jsonify({"error": "min_price dan max_price harus angka"}), 400
 
     search_keyword = request.args.get("search")
     if search_keyword:
@@ -116,12 +119,15 @@ def get_items():
         )
         stock_map = {stock["item_code"]: stock["quantity"] for stock in branch_stocks}
 
-    min_stock_filter = (
-        int(request.args.get("min_stock")) if request.args.get("min_stock") else None
-    )
-    max_stock_filter = (
-        int(request.args.get("max_stock")) if request.args.get("max_stock") else None
-    )
+    try:
+        min_stock_filter = (
+            int(request.args.get("min_stock")) if request.args.get("min_stock") else None
+        )
+        max_stock_filter = (
+            int(request.args.get("max_stock")) if request.args.get("max_stock") else None
+        )
+    except ValueError:
+        return jsonify({"error": "min_stock dan max_stock harus angka bulat"}), 400
 
     serialized_results = []
     for item_doc in master_items:
@@ -155,8 +161,9 @@ def create_item():
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
         name = data.get("name", "").strip().title()
-        item_code = generate_item_code()
 
         if not name:
             return jsonify({"error": "Nama wajib diisi"}), 400
@@ -174,14 +181,9 @@ def create_item():
         if items_collection.find_one({"name": name, "brand": data.get("brand")}):
             return jsonify({"error": "Item sudah ada"}), 400
 
-        if not item_code:
-            while True:
-                item_code = generate_item_code()
-                if not items_collection.find_one({"item_code": item_code}):
-                    break
-        else:
-            if items_collection.find_one({"item_code": item_code}):
-                return jsonify({"error": "Kode item sudah ada"}), 400
+        item_code = generate_item_code()
+        while items_collection.find_one({"item_code": item_code}):
+            item_code = generate_item_code()
         new_item_document = {
             "item_code": item_code,
             "name": name,
@@ -214,8 +216,16 @@ def update_item(id):
     """
     try:
         data = request.get_json()
-        for field in ["_id", "id", "item_code", "created_at"]:
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
+        try:
+            oid = ObjectId(id)
+        except Exception:
+            return jsonify({"error": "ID barang tidak valid"}), 400
+        for field in ["_id", "id", "item_code", "created_at", "stock"]:
             data.pop(field, None)
+        if not data:
+            return jsonify({"error": "Tidak ada data yang dapat diupdate"}), 400
         if "price" in data:
             try:
                 data["price"] = float(data["price"])

@@ -161,6 +161,8 @@ def create_invoice():
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
         user_role = g.user.get("role")
         user_name = g.user.get("name")
 
@@ -203,22 +205,24 @@ def create_invoice():
                 {"item_code": item_data.get("item_code")}
             )
 
-            if db_item:
-                try:
-                    price = float(item_data.get("price", 0))
-                    if price < 0:
-                        return jsonify({"error": "Harga tidak boleh negatif"}), 400
-                except ValueError:
-                    return jsonify({"error": "Harga harus angka"}), 400
+            if not db_item:
+                return jsonify({"error": f"Item '{item_data.get('item_code')}' tidak ditemukan"}), 404
 
-                prepared_items.append(
-                    {
-                        "item_code": db_item["item_code"],
-                        "item_name": db_item["name"],
-                        "quantity": int(item_data["quantity"]),
-                        "price_at_time": price,
-                    }
-                )
+            try:
+                price = float(item_data.get("price", 0))
+                if price < 0:
+                    return jsonify({"error": "Harga tidak boleh negatif"}), 400
+            except ValueError:
+                return jsonify({"error": "Harga harus angka"}), 400
+
+            prepared_items.append(
+                {
+                    "item_code": db_item["item_code"],
+                    "item_name": db_item["name"],
+                    "quantity": int(item_data["quantity"]),
+                    "price_at_time": price,
+                }
+            )
 
         # Logika Status Berdasarkan Tipe & Role
         if invoice_type == "IN":
@@ -302,6 +306,9 @@ def approve_invoice(invoice_id):
         if current_status == "PENDING_BRANCH":
             if user_role != "branch_admin":
                 return jsonify({"error": "Unauthorized"}), 403
+            user_branch = g.user.get("branch_name")
+            if invoice_document.get("branch_id") != user_branch:
+                return jsonify({"error": "Forbidden: bukan invoice cabang Anda"}), 403
             invoices_collection.update_one(
                 {"_id": ObjectId(invoice_id)},
                 {
@@ -420,9 +427,14 @@ def reject_invoice(invoice_id):
         Exception: Jika terjadi kesalahan saat menolak invoice
     """
     try:
+        try:
+            oid = ObjectId(invoice_id)
+        except Exception:
+            return jsonify({"error": "ID invoice tidak valid"}), 400
+
         user_name = g.user.get("name")
-        mongo.get_collection("invoices").update_one(
-            {"_id": ObjectId(invoice_id)},
+        result = mongo.get_collection("invoices").update_one(
+            {"_id": oid},
             {
                 "$set": {
                     "status": "DITOLAK",
@@ -431,9 +443,11 @@ def reject_invoice(invoice_id):
                 }
             },
         )
+        if result.matched_count == 0:
+            return jsonify({"error": "Invoice tidak ditemukan"}), 404
         return jsonify({"message": "Approval ditolak"}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 404
+        return jsonify({"error": str(e)}), 500
 
 
 @invoices_bp.route("/<id>", methods=["DELETE"])

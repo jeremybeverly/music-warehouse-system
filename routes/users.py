@@ -126,7 +126,11 @@ def add_user():
         Exception: Jika terjadi kesalahan saat menambahkan pengguna.
     """
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body harus berupa JSON"}), 400
     new_role = data.get("role")
+    if not new_role or new_role not in ROLE_PREFIXES:
+        return jsonify({"error": f"Role tidak valid. Pilih: {', '.join(ROLE_PREFIXES.keys())}"}), 400
     users_collection = mongo.get_collection("users")
 
     raw_username = data.get("username", "")
@@ -170,7 +174,14 @@ def add_user():
             if users_collection.find_one({"user_code": user_code}):
                 return jsonify({"error": "Kode pengguna sudah ada"}), 400
 
-        hashed = bcrypt.hashpw(data["password"].encode("utf-8"), bcrypt.gensalt())
+        password = data.get("password", "")
+        if not password:
+            return jsonify({"error": "Password wajib diisi"}), 400
+        if len(password) < 6:
+            return jsonify({"error": "Password minimal 6 karakter"}), 400
+        if len(password.encode("utf-8")) > 72:
+            return jsonify({"error": "Password maksimal 72 karakter"}), 400
+        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
 
         new_user = {
             "user_code": user_code,
@@ -269,7 +280,14 @@ def delete_user(user_id):
         Exception: Jika terjadi kesalahan saat menghapus pengguna.
     """
     try:
-        mongo.get_collection("users").delete_one({"_id": ObjectId(user_id)})
+        try:
+            oid = ObjectId(user_id)
+        except Exception:
+            return jsonify({"error": "ID pengguna tidak valid"}), 400
+
+        result = mongo.get_collection("users").delete_one({"_id": oid})
+        if result.deleted_count == 0:
+            return jsonify({"error": "Pengguna tidak ditemukan"}), 404
         return jsonify({"message": "Pengguna berhasil dihapus"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

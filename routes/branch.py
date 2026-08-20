@@ -92,6 +92,8 @@ def create_branch():
     branch_collection = mongo.get_collection("branches")
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
 
         name = data.get("name", "").strip().title()
         email = data.get("email", "").strip().lower()
@@ -149,6 +151,8 @@ def update_branch(id):
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body harus berupa JSON"}), 400
 
         for field in ["_id", "id", "created_at"]:
             data.pop(field, None)
