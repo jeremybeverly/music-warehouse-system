@@ -4,3 +4,4 @@ bcrypt
 pyjwt
 gunicorn
 eventlet
+python-dotenv

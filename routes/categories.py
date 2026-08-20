@@ -3,6 +3,7 @@ from datetime import datetime
 from bson import ObjectId
 from flask import Blueprint, jsonify, request
 
+from auth.decorators import warehouse_admin_required
 from config import *
 from connection import MongoConnection
 
@@ -37,6 +38,7 @@ def get_categories():
 
 
 @categories_bp.route("/", methods=["POST"])
+@warehouse_admin_required
 def create_category():
     """
     Membuat kategori baru

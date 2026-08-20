@@ -87,6 +87,8 @@ def submit_adjustment():
     Submit adjustment untuk inventory items.
     """
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body harus berupa JSON"}), 400
     adjustments = data.get("adjustments", [])
 
     if not adjustments:
@@ -111,36 +113,52 @@ def submit_adjustment():
     pending_requests = []
 
     for item in adjustments:
+        item_code = item.get("item_code")
+        physical_stock = item.get("physical_stock")
+        diff = item.get("diff")
+
+        if item_code is None or physical_stock is None or diff is None:
+            return jsonify({"error": "Setiap item harus memiliki item_code, physical_stock, dan diff"}), 400
+
+        try:
+            physical_stock = int(physical_stock)
+            diff = int(diff)
+        except (ValueError, TypeError):
+            return jsonify({"error": "physical_stock dan diff harus angka"}), 400
+
+        if physical_stock < 0:
+            return jsonify({"error": "Stok fisik tidak boleh negatif"}), 400
+
         if is_admin:
             update_data = {
                 "last_opname_at": current_time,
                 "last_opname_by": g.user.get("name"),
             }
 
-            if item["diff"] != 0:
-                update_data[stock_field] = int(item["physical_stock"])
+            if diff != 0:
+                update_data[stock_field] = physical_stock
                 update_data["last_opname_diff"] = 0
                 update_data["last_opname_reason"] = (
-                    f"Aman (Beda {item['diff']}): Alasan, {item.get('reason')}"
+                    f"Aman (Beda {diff}): Alasan, {item.get('reason')}"
                 )
             else:
                 update_data["last_opname_diff"] = 0
                 update_data["last_opname_reason"] = "Sesuai (Routine Check)"
 
             target_coll.update_one(
-                {"item_code": item["item_code"]}, {"$set": update_data}
+                {"item_code": item_code}, {"$set": update_data}
             )
             update_count += 1
 
         else:
-            if item["diff"] != 0:
+            if diff != 0:
                 pending_requests.append(
                     {
-                        "item_code": item["item_code"],
-                        "name": item["name"],
-                        "system_stock": item["system_stock"],
-                        "physical_stock": int(item["physical_stock"]),
-                        "diff": item["diff"],
+                        "item_code": item_code,
+                        "name": item.get("name", ""),
+                        "system_stock": item.get("system_stock", 0),
+                        "physical_stock": physical_stock,
+                        "diff": diff,
                         "reason": item.get("reason", "-"),
                         "requested_by": g.user.get("name"),
                         "branch": scope_branch,
@@ -198,10 +216,20 @@ def approve_request(req_id):
     Approve permintaan opname.
     """
     requests_coll = mongo.get_collection("opname_requests")
-    req = requests_coll.find_one({"_id": ObjectId(req_id)})
+    try:
+        oid = ObjectId(req_id)
+    except Exception:
+        return jsonify({"error": "ID request tidak valid"}), 400
+    req = requests_coll.find_one({"_id": oid})
 
     if not req:
         return jsonify({"error": "Request not found"}), 404
+
+    user_role = g.user.get("role")
+    user_branch = g.user.get("branch_name")
+
+    if user_role == "branch_admin" and req["branch"] != user_branch:
+        return jsonify({"error": "Forbidden: bukan request cabang Anda"}), 403
 
     if req["branch"] == "Pusat":
         target_coll = mongo.get_collection("items")
@@ -235,5 +263,17 @@ def reject_request(req_id):
     """
     Reject permintaan opname.
     """
-    mongo.get_collection("opname_requests").delete_one({"_id": ObjectId(req_id)})
+    requests_coll = mongo.get_collection("opname_requests")
+    req = requests_coll.find_one({"_id": ObjectId(req_id)})
+
+    if not req:
+        return jsonify({"error": "Request not found"}), 404
+
+    user_role = g.user.get("role")
+    user_branch = g.user.get("branch_name")
+
+    if user_role == "branch_admin" and req["branch"] != user_branch:
+        return jsonify({"error": "Forbidden: bukan request cabang Anda"}), 403
+
+    requests_coll.delete_one({"_id": ObjectId(req_id)})
     return jsonify({"message": "Request Rejected"}), 200
