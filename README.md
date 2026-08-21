@@ -3,6 +3,11 @@
 Sistem manajemen gudang musik berbasis web yang menangani stok barang, distribusi ke cabang, opname inventaris, dan manajemen pengguna. Dibangun dengan **Flask** dan **MongoDB Atlas**.
 
 ---
+<img width="1871" height="951" alt="Screenshot_20260821_1942323" src="https://github.com/user-attachments/assets/5a6a636f-c4e7-46b7-8f73-6b22bc358424" />
+<img width="1875" height="951" alt="Screenshot_20260821_194233" src="https://github.com/user-attachments/assets/3ac2e7a3-3a9a-41ee-91af-cc9d669ada4e" />
+<img width="1862" height="946" alt="StockOpnamePaage" src="https://github.com/user-attachments/assets/4cc558ee-81c2-47dc-8f1b-b0ca7be7b0f2" />
+
+---
 
 ## Fitur Utama
 
